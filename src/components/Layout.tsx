@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,14 +30,21 @@ const Layout: React.FC<LayoutProps> = ({
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center">
               <h1 className="text-2xl md:text-3xl font-bold text-phase10-darkBlue dark:text-phase10-lightBlue">{title}</h1>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={toggleTheme} 
-                className="ml-2"
-              >
-                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={toggleTheme} 
+                    className="ml-2"
+                  >
+                    {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Toggle {theme === 'dark' ? 'light' : 'dark'} mode</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
             <div className="flex items-center space-x-2">
               {backLink && (
