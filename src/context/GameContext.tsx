@@ -367,10 +367,28 @@ export const GameProvider = ({ children }: GameProviderProps) => {
         throw new Error("Invalid data format");
       }
       
-      const gamesWithDates = parsedData.games.map(game => ({
-        ...game,
-        date: new Date(game.date)
-      }));
+      const gamesWithDates = parsedData.games.map(game => {
+        try {
+          const gameDate = new Date(game.date);
+          if (isNaN(gameDate.getTime())) {
+            console.warn(`Invalid date found for game, using current date as fallback`);
+            return {
+              ...game,
+              date: new Date()
+            };
+          }
+          return {
+            ...game,
+            date: gameDate
+          };
+        } catch (e) {
+          console.warn(`Error processing game date, using current date as fallback`, e);
+          return {
+            ...game,
+            date: new Date()
+          };
+        }
+      });
       
       const playersWithColors = parsedData.players.map(player => {
         if (!player.color) {
@@ -382,12 +400,34 @@ export const GameProvider = ({ children }: GameProviderProps) => {
         return player;
       });
       
-      setGames(gamesWithDates);
+      const playerIds = new Set(playersWithColors.map(p => p.id));
+      
+      const validGames = gamesWithDates.filter(game => {
+        const validPlayers = game.players.every(player => playerIds.has(player.id));
+        
+        if (!validPlayers) {
+          console.warn(`Game with invalid player references filtered out`, game);
+          return false;
+        }
+        
+        const validRounds = game.rounds.every(round => 
+          round.playerScores.every(ps => playerIds.has(ps.playerId))
+        );
+        
+        if (!validRounds) {
+          console.warn(`Game with invalid player references in rounds filtered out`, game);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      setGames(validGames);
       setPlayers(playersWithColors);
       
       toast({
         title: "Import successful",
-        description: `Imported ${gamesWithDates.length} games and ${playersWithColors.length} players`
+        description: `Imported ${validGames.length} games and ${playersWithColors.length} players`
       });
       
       return true;
