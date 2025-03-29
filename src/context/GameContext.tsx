@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Game, Player, Round, PlayerScore } from "@/types";
+import { Game, Player, Round, PlayerScore, ExportData } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/hooks/use-toast";
 
@@ -15,6 +15,8 @@ interface GameContextType {
   updateAllPlayerScores: (gameId: string, roundId: string, playerScores: PlayerScore[]) => void;
   deleteRound: (gameId: string, roundId: string) => void;
   updatePlayerAvatar: (playerId: string, avatar: Player["avatar"]) => void;
+  exportGameData: () => void;
+  importGameData: (jsonData: string) => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -240,6 +242,75 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     });
   };
 
+  const exportGameData = () => {
+    try {
+      const exportData: ExportData = {
+        games: games.map(game => ({
+          ...game,
+          date: game.date instanceof Date ? game.date : new Date(game.date)
+        })),
+        players,
+        exportDate: new Date().toISOString()
+      };
+      
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`;
+      
+      const exportFileDefaultName = `phase10_data_${new Date().toISOString().slice(0, 10)}.json`;
+      
+      const linkElement = document.createElement("a");
+      linkElement.setAttribute("href", dataUri);
+      linkElement.setAttribute("download", exportFileDefaultName);
+      linkElement.click();
+      
+      toast({
+        title: "Export successful",
+        description: "Your game data has been exported successfully"
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export failed",
+        description: "Failed to export game data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const importGameData = (jsonData: string): boolean => {
+    try {
+      const parsedData: ExportData = JSON.parse(jsonData);
+      
+      if (!parsedData.games || !Array.isArray(parsedData.games) || 
+          !parsedData.players || !Array.isArray(parsedData.players)) {
+        throw new Error("Invalid data format");
+      }
+      
+      const gamesWithDates = parsedData.games.map(game => ({
+        ...game,
+        date: new Date(game.date)
+      }));
+      
+      setGames(gamesWithDates);
+      setPlayers(parsedData.players);
+      
+      toast({
+        title: "Import successful",
+        description: `Imported ${gamesWithDates.length} games and ${parsedData.players.length} players`
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("Import failed:", error);
+      toast({
+        title: "Import failed",
+        description: "Failed to import game data. Make sure the file is valid.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const value = {
     games,
     players,
@@ -251,7 +322,9 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     updatePlayerScore,
     updateAllPlayerScores,
     deleteRound,
-    updatePlayerAvatar
+    updatePlayerAvatar,
+    exportGameData,
+    importGameData
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

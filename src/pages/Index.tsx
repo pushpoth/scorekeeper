@@ -4,11 +4,13 @@ import { Link } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trash2, Edit, User } from "lucide-react";
+import { Trash2, Edit, Download, Upload } from "lucide-react";
 import Layout from "@/components/Layout";
-import { sortGamesByDate, formatDate, calculateTotalScore } from "@/utils/gameUtils";
+import { sortGamesByDate, formatDate, calculateTotalScore, getLastPlayedPhase } from "@/utils/gameUtils";
 import PlayerAvatar from "@/components/PlayerAvatar";
 import AvatarEditor from "@/components/AvatarEditor";
+import MedalIcon from "@/components/MedalIcon";
+import ImportDataDialog from "@/components/ImportDataDialog";
 import {
   Dialog,
   DialogContent,
@@ -25,11 +27,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 
 const Index = () => {
-  const { games, players, deleteGame, updatePlayerAvatar } = useGameContext();
+  const { games, players, deleteGame, updatePlayerAvatar, exportGameData } = useGameContext();
   const [gameToDelete, setGameToDelete] = useState<string | null>(null);
   const [playerToEdit, setPlayerToEdit] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   
   const sortedGames = sortGamesByDate(games);
 
@@ -58,20 +62,37 @@ const Index = () => {
     };
   }).sort((a, b) => a.total - b.total); // Sort by score (ascending)
   
-  const lowestScorer = grandTotals.length > 0 ? grandTotals[0] : null;
-  const highestScorer = grandTotals.length > 0 ? grandTotals[grandTotals.length - 1] : null;
-
   const selectedPlayer = playerToEdit ? players.find(p => p.id === playerToEdit) : null;
 
   return (
     <Layout title="Phase 10 Score Tracker">
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={exportGameData}
+            className="flex items-center gap-1 border-phase10-blue text-phase10-darkBlue dark:border-phase10-lightBlue dark:text-phase10-lightBlue"
+          >
+            <Download size={16} /> Export Data
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setImportDialogOpen(true)}
+            className="flex items-center gap-1 border-phase10-blue text-phase10-darkBlue dark:border-phase10-lightBlue dark:text-phase10-lightBlue"
+          >
+            <Upload size={16} /> Import Data
+          </Button>
+        </div>
         <Link to="/games/new">
           <Button className="bg-phase10-blue hover:bg-phase10-darkBlue text-white">
             New Game
           </Button>
         </Link>
       </div>
+
+      <ImportDataDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
 
       {sortedGames.length === 0 ? (
         <div className="text-center py-10">
@@ -104,6 +125,8 @@ const Index = () => {
                     <div className="flex flex-wrap gap-2">
                       {game.players.map((player) => {
                         const score = calculateTotalScore(game, player.id);
+                        const lastPhase = getLastPlayedPhase(game, player.id);
+                        
                         return (
                           <div 
                             key={player.id}
@@ -111,6 +134,18 @@ const Index = () => {
                           >
                             <PlayerAvatar player={player} size="sm" />
                             <span>{player.name}: {score}</span>
+                            {lastPhase && (
+                              <Badge 
+                                variant={lastPhase.completed ? "default" : "outline"} 
+                                className={`ml-1 text-xs ${lastPhase.completed 
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                                  : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-transparent dark:border-amber-700 dark:text-amber-400"
+                                }`}
+                              >
+                                Phase {lastPhase.phase}
+                                {lastPhase.completed ? " ✓" : ""}
+                              </Badge>
+                            )}
                           </div>
                         );
                       })}
@@ -163,29 +198,30 @@ const Index = () => {
               <Card className="dark:bg-gray-800 dark:border-gray-700">
                 <CardContent className="p-4">
                   <div className="space-y-2">
-                    {grandTotals.map(player => (
+                    {grandTotals.map((player, index) => (
                       <div 
                         key={player.playerId}
                         className={`flex items-center justify-between p-2 rounded-lg ${
-                          player === lowestScorer 
+                          index === 0 
                             ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" 
-                            : player === highestScorer 
+                            : index === grandTotals.length - 1 
                               ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" 
                               : "bg-gray-50 dark:bg-gray-700"
                         }`}
                       >
                         <div className="flex items-center gap-2">
+                          <MedalIcon rank={index + 1} />
                           <PlayerAvatar 
                             player={{ id: player.playerId, name: player.name, avatar: player.avatar }}
                             size="sm"
                           />
                           <span className="font-medium">{player.name}</span>
-                          {player === lowestScorer && (
+                          {index === 0 && (
                             <span className="text-xs bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-0.5 rounded-full">
                               Best
                             </span>
                           )}
-                          {player === highestScorer && (
+                          {index === grandTotals.length - 1 && grandTotals.length > 1 && (
                             <span className="text-xs bg-amber-100 dark:bg-amber-800 text-amber-800 dark:text-amber-100 px-2 py-0.5 rounded-full">
                               Trailing
                             </span>
@@ -193,9 +229,9 @@ const Index = () => {
                         </div>
                         <span 
                           className={`text-lg font-bold ${
-                            player === lowestScorer 
+                            index === 0
                               ? "text-green-600 dark:text-green-400" 
-                              : player === highestScorer 
+                              : index === grandTotals.length - 1 && grandTotals.length > 1
                                 ? "text-amber-600 dark:text-amber-400" 
                                 : ""
                           }`}

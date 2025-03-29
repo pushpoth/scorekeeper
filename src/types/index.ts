@@ -1,4 +1,5 @@
 
+
 export interface Player {
   id: string;
   name: string;
@@ -28,3 +29,10 @@ export interface Game {
 }
 
 export type ThemeMode = "light" | "dark";
+
+export interface ExportData {
+  games: Game[];
+  players: Player[];
+  exportDate: string;
+}
+

@@ -1,4 +1,5 @@
 
+
 import { Game, Player, PlayerScore } from "@/types";
 
 export const calculateTotalScore = (game: Game, playerId: string): number => {
@@ -42,6 +43,23 @@ export const getCurrentPhase = (game: Game, playerId: string): number => {
   return Math.min(maxCompletedPhase + 1, 10);
 };
 
+export const getLastPlayedPhase = (game: Game, playerId: string): { phase: number, completed: boolean } | null => {
+  if (!game.rounds.length) return null;
+  
+  // Start from the most recent round and find the first round where this player has a score
+  for (let i = game.rounds.length - 1; i >= 0; i--) {
+    const playerScore = game.rounds[i].playerScores.find(ps => ps.playerId === playerId);
+    if (playerScore) {
+      return { 
+        phase: playerScore.phase,
+        completed: playerScore.completed
+      };
+    }
+  }
+  
+  return null;
+};
+
 export const calculateGrandTotal = (games: Game[], playerId: string): number => {
   return games.reduce((total, game) => {
     // Only include games where the player participated
@@ -79,3 +97,4 @@ export const getPlayerRankings = (games: Game[], players: Player[]): {
     rank: index + 1
   }));
 };
+
