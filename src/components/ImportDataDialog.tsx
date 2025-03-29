@@ -1,110 +1,149 @@
 
-import React, { useState } from "react";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AlertCircle, Upload } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useGameContext } from "@/context/GameContext";
-import { AlertTriangle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ImportDataDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  importType?: 'json' | 'csv';
 }
 
-const ImportDataDialog: React.FC<ImportDataDialogProps> = ({ open, onOpenChange }) => {
+const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDataDialogProps) => {
   const [file, setFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { importGameData } = useGameContext();
+  const [activeTab, setActiveTab] = useState<'json' | 'csv'>(importType);
+  const { importGameData, importCsvData } = useGameContext();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) {
-      setFile(e.target.files[0]);
-      setError(null);
+    setError(null);
+    const selectedFile = e.target.files?.[0];
+    
+    if (!selectedFile) return;
+    
+    if (activeTab === 'json' && !selectedFile.name.toLowerCase().endsWith('.json')) {
+      setError("Please select a JSON file.");
+      setFile(null);
+      return;
     }
+    
+    if (activeTab === 'csv' && !selectedFile.name.toLowerCase().endsWith('.csv')) {
+      setError("Please select a CSV file.");
+      setFile(null);
+      return;
+    }
+    
+    setFile(selectedFile);
   };
 
   const handleImport = async () => {
     if (!file) {
-      setError("Please select a file to import");
+      setError("Please select a file to import.");
       return;
     }
 
     try {
-      setIsLoading(true);
-      setError(null);
+      const text = await file.text();
       
-      const fileContent = await file.text();
-      const success = importGameData(fileContent);
+      let success = false;
+      if (activeTab === 'json') {
+        success = importGameData(text);
+      } else {
+        success = importCsvData(text);
+      }
       
       if (success) {
         onOpenChange(false);
-        setFile(null);
       }
     } catch (err) {
-      console.error("Import error:", err);
-      setError("Failed to read the file. Please make sure it's a valid Phase 10 data file.");
-    } finally {
-      setIsLoading(false);
+      console.error("Error reading file:", err);
+      setError("Failed to read the selected file.");
     }
   };
+  
+  // Update active tab when importType changes
+  if (importType !== activeTab) {
+    setActiveTab(importType);
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md dark:bg-gray-800 dark:border-gray-700">
         <DialogHeader>
-          <DialogTitle className="dark:text-white">Import Game Data</DialogTitle>
-          <DialogDescription className="dark:text-gray-400">
-            Upload a previously exported Phase 10 data file to restore your games and players.
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Import Game Data
+          </DialogTitle>
+          <DialogDescription>
+            Upload your exported Phase 10 game data to restore your games and players
           </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className="grid w-full max-w-sm items-center gap-1.5">
-            <label htmlFor="dataFile" className="text-sm font-medium dark:text-gray-300">
-              Data File
-            </label>
-            <input
-              id="dataFile"
-              type="file"
-              accept=".json"
-              onChange={handleFileChange}
-              className="cursor-pointer file:cursor-pointer file:border-0 file:bg-gray-100 file:text-gray-600 
-                file:py-2 file:px-4 file:mr-4 file:rounded-md dark:file:bg-gray-700 
-                dark:file:text-gray-300 dark:text-gray-300"
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400">
-              <AlertTriangle size={16} />
-              <span>{error}</span>
+        
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'json' | 'csv')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="json">JSON Data</TabsTrigger>
+            <TabsTrigger value="csv">CSV Data</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="json" className="pt-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="importFile">Select JSON file</Label>
+                <Input
+                  id="importFile"
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileChange}
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                The file should be an exported Phase 10 score tracker data file.
+              </p>
             </div>
-          )}
-        </div>
+          </TabsContent>
+          
+          <TabsContent value="csv" className="pt-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="importCsvFile">Select CSV file</Label>
+                <Input
+                  id="importCsvFile"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                The CSV file should have columns for date, player scores, phases, and completion status.
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Example headers: date, PlayerName_score, PlayerName_phase, PlayerName_completed
+              </p>
+            </div>
+          </TabsContent>
+        </Tabs>
+        
+        {error && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)} 
-            className="dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
-          >
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleImport}
-            disabled={!file || isLoading}
-            className="bg-phase10-blue hover:bg-phase10-darkBlue text-white"
-          >
-            {isLoading ? "Importing..." : "Import Data"}
+          <Button onClick={handleImport} disabled={!file}>
+            Import
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

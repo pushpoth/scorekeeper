@@ -1,5 +1,4 @@
 
-
 export interface Player {
   id: string;
   name: string;
@@ -7,6 +6,8 @@ export interface Player {
     type: "letter" | "emoji" | "image";
     value: string;
   };
+  color?: string; // Add support for player color
+  manualTotal?: number; // Add support for manual score override
 }
 
 export interface Round {
@@ -36,3 +37,10 @@ export interface ExportData {
   exportDate: string;
 }
 
+export interface CsvGameData {
+  date: string;
+  playerNames: string[];
+  playerScores: number[];
+  playerPhases: number[];
+  phaseCompleted: boolean[];
+}

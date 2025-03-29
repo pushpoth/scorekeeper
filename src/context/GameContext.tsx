@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Game, Player, Round, PlayerScore, ExportData } from "@/types";
+import { Game, Player, Round, PlayerScore, ExportData, CsvGameData } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/hooks/use-toast";
+import { stringToColor } from "@/utils/gameUtils";
+import { parse, unparse } from "papaparse";
 
 interface GameContextType {
   games: Game[];
@@ -15,8 +17,11 @@ interface GameContextType {
   updateAllPlayerScores: (gameId: string, roundId: string, playerScores: PlayerScore[]) => void;
   deleteRound: (gameId: string, roundId: string) => void;
   updatePlayerAvatar: (playerId: string, avatar: Player["avatar"]) => void;
+  updatePlayerManualScore: (playerId: string, manualTotal?: number) => void;
   exportGameData: () => void;
+  exportCsvData: () => void;
   importGameData: (jsonData: string) => boolean;
+  importCsvData: (csvData: string) => boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -53,7 +58,19 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     
     if (savedPlayers) {
       try {
-        setPlayers(JSON.parse(savedPlayers));
+        const parsedPlayers = JSON.parse(savedPlayers);
+        
+        const playersWithColors = parsedPlayers.map((player: Player) => {
+          if (!player.color) {
+            return {
+              ...player,
+              color: stringToColor(player.name)
+            };
+          }
+          return player;
+        });
+        
+        setPlayers(playersWithColors);
       } catch (error) {
         console.error("Failed to parse saved players", error);
       }
@@ -108,7 +125,8 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     
     const newPlayer: Player = {
       id: uuidv4(),
-      name: name.trim()
+      name: name.trim(),
+      color: stringToColor(name.trim())
     };
     
     setPlayers(prevPlayers => [...prevPlayers, newPlayer]);
@@ -242,6 +260,21 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     });
   };
 
+  const updatePlayerManualScore = (playerId: string, manualTotal?: number) => {
+    setPlayers(prevPlayers => 
+      prevPlayers.map(player => 
+        player.id === playerId 
+          ? { ...player, manualTotal }
+          : player
+      )
+    );
+    
+    toast({
+      title: "Score updated",
+      description: "The player's manual score has been updated"
+    });
+  };
+
   const exportGameData = () => {
     try {
       const exportData: ExportData = {
@@ -277,6 +310,54 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     }
   };
 
+  const exportCsvData = () => {
+    try {
+      const csvRows: any[] = [];
+      
+      games.forEach(game => {
+        game.rounds.forEach(round => {
+          const row: any = {
+            date: new Date(game.date).toISOString().split('T')[0]
+          };
+          
+          round.playerScores.forEach(score => {
+            const player = players.find(p => p.id === score.playerId);
+            if (player) {
+              const playerName = player.name;
+              row[`${playerName}_score`] = score.score;
+              row[`${playerName}_phase`] = score.phase;
+              row[`${playerName}_completed`] = score.completed ? "Yes" : "No";
+            }
+          });
+          
+          csvRows.push(row);
+        });
+      });
+      
+      const csv = unparse(csvRows);
+      const dataUri = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+      
+      const exportFileDefaultName = `phase10_data_${new Date().toISOString().slice(0, 10)}.csv`;
+      
+      const linkElement = document.createElement("a");
+      linkElement.setAttribute("href", dataUri);
+      linkElement.setAttribute("download", exportFileDefaultName);
+      linkElement.click();
+      
+      toast({
+        title: "CSV Export successful",
+        description: "Your game data has been exported to CSV successfully"
+      });
+    } catch (error) {
+      console.error("CSV Export failed:", error);
+      toast({
+        title: "Export failed",
+        description: "Failed to export CSV data",
+        variant: "destructive",
+      });
+    }
+  };
+
   const importGameData = (jsonData: string): boolean => {
     try {
       const parsedData: ExportData = JSON.parse(jsonData);
@@ -291,12 +372,22 @@ export const GameProvider = ({ children }: GameProviderProps) => {
         date: new Date(game.date)
       }));
       
+      const playersWithColors = parsedData.players.map(player => {
+        if (!player.color) {
+          return {
+            ...player,
+            color: stringToColor(player.name)
+          };
+        }
+        return player;
+      });
+      
       setGames(gamesWithDates);
-      setPlayers(parsedData.players);
+      setPlayers(playersWithColors);
       
       toast({
         title: "Import successful",
-        description: `Imported ${gamesWithDates.length} games and ${parsedData.players.length} players`
+        description: `Imported ${gamesWithDates.length} games and ${playersWithColors.length} players`
       });
       
       return true;
@@ -305,6 +396,121 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       toast({
         title: "Import failed",
         description: "Failed to import game data. Make sure the file is valid.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const importCsvData = (csvData: string): boolean => {
+    try {
+      const parsedCsv = parse(csvData, { 
+        header: true,
+        skipEmptyLines: true
+      });
+      
+      if (!parsedCsv.data || !Array.isArray(parsedCsv.data) || parsedCsv.data.length === 0) {
+        throw new Error("Invalid CSV data format");
+      }
+
+      const headers = Object.keys(parsedCsv.data[0]);
+      const playerSet = new Set<string>();
+      
+      headers.forEach(header => {
+        if (header.endsWith('_score')) {
+          const playerName = header.replace('_score', '');
+          playerSet.add(playerName);
+        }
+      });
+      
+      const playerNames = Array.from(playerSet);
+
+      const playerMap = new Map<string, string>();
+
+      playerNames.forEach(name => {
+        let player = players.find(p => p.name === name);
+        
+        if (!player) {
+          const id = uuidv4();
+          const newPlayer: Player = {
+            id,
+            name,
+            color: stringToColor(name)
+          };
+          
+          setPlayers(prev => [...prev, newPlayer]);
+          playerMap.set(name, id);
+        } else {
+          playerMap.set(name, player.id);
+        }
+      });
+
+      const gamesByDate = new Map<string, any[]>();
+      
+      parsedCsv.data.forEach((row: any) => {
+        const date = row.date;
+        if (!gamesByDate.has(date)) {
+          gamesByDate.set(date, []);
+        }
+        gamesByDate.get(date)?.push(row);
+      });
+
+      let newGames: Game[] = [];
+      gamesByDate.forEach((rows, dateStr) => {
+        const gamePlayers = playerNames
+          .filter(name => rows.some((row: any) => row[`${name}_score`] !== undefined))
+          .map(name => {
+            const playerId = playerMap.get(name) || "";
+            const existingPlayer = players.find(p => p.id === playerId);
+            if (existingPlayer) return existingPlayer;
+            
+            return {
+              id: playerId,
+              name: name,
+              color: stringToColor(name)
+            };
+          });
+
+        const rounds: Round[] = rows.map((_: any, index: number) => {
+          const playerScores: PlayerScore[] = gamePlayers.map(player => {
+            const row = rows[index];
+            return {
+              playerId: player.id,
+              score: parseInt(row[`${player.name}_score`]) || 0,
+              phase: parseInt(row[`${player.name}_phase`]) || 1,
+              completed: row[`${player.name}_completed`] === "Yes"
+            };
+          });
+          
+          return {
+            id: uuidv4(),
+            playerScores
+          };
+        });
+
+        const game: Game = {
+          id: uuidv4(),
+          date: new Date(dateStr),
+          players: gamePlayers,
+          rounds
+        };
+        
+        newGames.push(game);
+      });
+
+      setGames(prev => [...prev, ...newGames]);
+      
+      toast({
+        title: "CSV import successful",
+        description: `Imported ${newGames.length} games from CSV data`
+      });
+      
+      return true;
+    } catch (error) {
+      console.error("CSV Import failed:", error);
+      toast({
+        title: "CSV import failed",
+        description: "Failed to import CSV data. Make sure the file is valid.",
         variant: "destructive",
       });
       return false;
@@ -323,8 +529,11 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     updateAllPlayerScores,
     deleteRound,
     updatePlayerAvatar,
+    updatePlayerManualScore,
     exportGameData,
-    importGameData
+    exportCsvData,
+    importGameData,
+    importCsvData
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

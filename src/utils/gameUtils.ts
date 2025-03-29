@@ -1,5 +1,4 @@
 
-
 import { Game, Player, PlayerScore } from "@/types";
 
 export const calculateTotalScore = (game: Game, playerId: string): number => {
@@ -75,16 +74,22 @@ export const getPlayerRankings = (games: Game[], players: Player[]): {
   name: string;
   total: number;
   rank: number;
+  color?: string;
 }[] => {
   if (!games.length || !players.length) return [];
   
   // Calculate totals for each player
   const totals = players.map(player => {
-    const total = calculateGrandTotal(games, player.id);
+    // Use manual total if defined, otherwise calculate from games
+    const total = player.manualTotal !== undefined 
+      ? player.manualTotal 
+      : calculateGrandTotal(games, player.id);
+      
     return { 
       playerId: player.id, 
       name: player.name, 
-      total
+      total,
+      color: player.color
     };
   });
   
@@ -98,3 +103,19 @@ export const getPlayerRankings = (games: Game[], players: Player[]): {
   }));
 };
 
+// Generate a random color based on string input
+export const stringToColor = (str: string): string => {
+  // Use a hash function to convert string to a number
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Convert the hash to a color with good contrast and saturation
+  // Avoid very light colors that would be hard to see on white backgrounds
+  const h = Math.abs(hash) % 360; // Hue (0-359)
+  const s = 65 + Math.abs(hash % 20); // Saturation (65-85%)
+  const l = 45 + Math.abs(hash % 10); // Lightness (45-55%)
+  
+  return `hsl(${h}, ${s}%, ${l}%)`;
+};
