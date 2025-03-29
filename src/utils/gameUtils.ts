@@ -41,3 +41,41 @@ export const getCurrentPhase = (game: Game, playerId: string): number => {
   const maxCompletedPhase = Math.max(...completedPhases);
   return Math.min(maxCompletedPhase + 1, 10);
 };
+
+export const calculateGrandTotal = (games: Game[], playerId: string): number => {
+  return games.reduce((total, game) => {
+    // Only include games where the player participated
+    if (game.players.some(p => p.id === playerId)) {
+      return total + calculateTotalScore(game, playerId);
+    }
+    return total;
+  }, 0);
+};
+
+export const getPlayerRankings = (games: Game[], players: Player[]): {
+  playerId: string;
+  name: string;
+  total: number;
+  rank: number;
+}[] => {
+  if (!games.length || !players.length) return [];
+  
+  // Calculate totals for each player
+  const totals = players.map(player => {
+    const total = calculateGrandTotal(games, player.id);
+    return { 
+      playerId: player.id, 
+      name: player.name, 
+      total
+    };
+  });
+  
+  // Sort by total (ascending, since lower is better in Phase 10)
+  const sorted = [...totals].sort((a, b) => a.total - b.total);
+  
+  // Add rank
+  return sorted.map((player, index) => ({
+    ...player,
+    rank: index + 1
+  }));
+};

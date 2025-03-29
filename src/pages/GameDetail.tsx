@@ -9,17 +9,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction, AlertDialogHeader, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { formatDate, calculateTotalScore, getPlayerName, getCurrentPhase } from "@/utils/gameUtils";
 import { PlayerScore } from "@/types";
-import { Check, Plus } from "lucide-react";
+import { Check, Edit, Plus, Trash2 } from "lucide-react";
+import PlayerAvatar from "@/components/PlayerAvatar";
+import RoundEditor from "@/components/RoundEditor";
 
 const GameDetail = () => {
   const { gameId } = useParams<{ gameId: string }>();
-  const { games, players, addRound, getGame } = useGameContext();
+  const { games, players, addRound, getGame, deleteRound, updateAllPlayerScores } = useGameContext();
   const [newScores, setNewScores] = useState<{ [playerId: string]: number }>({});
   const [phases, setPhases] = useState<{ [playerId: string]: number }>({});
   const [completed, setCompleted] = useState<{ [playerId: string]: boolean }>({});
   const [showNewRound, setShowNewRound] = useState(false);
+  const [editRoundId, setEditRoundId] = useState<string | null>(null);
+  const [roundToDelete, setRoundToDelete] = useState<string | null>(null);
 
   const game = getGame(gameId || "");
 
@@ -34,9 +51,7 @@ const GameDetail = () => {
 
   const handlePhaseChange = (playerId: string, value: string) => {
     const phase = parseInt(value) || 1;
-    // Clamp between 1 and 10
-    const clampedPhase = Math.min(Math.max(phase, 1), 10);
-    setPhases((prev) => ({ ...prev, [playerId]: clampedPhase }));
+    setPhases((prev) => ({ ...prev, [playerId]: phase }));
   };
 
   const handleCompletedChange = (playerId: string, checked: boolean) => {
@@ -72,21 +87,33 @@ const GameDetail = () => {
     setShowNewRound(!showNewRound);
   };
 
+  const handleUpdateRound = (gameId: string, roundId: string, updatedScores: PlayerScore[]) => {
+    updateAllPlayerScores(gameId, roundId, updatedScores);
+    setEditRoundId(null);
+  };
+
+  const handleDeleteRound = () => {
+    if (roundToDelete && game) {
+      deleteRound(game.id, roundToDelete);
+      setRoundToDelete(null);
+    }
+  };
+
   return (
     <Layout title="Game Details" backLink="/">
       <div className="mb-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-700">{formatDate(game.date)}</h2>
-          <span className="text-sm text-gray-500">
+          <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">{formatDate(game.date)}</h2>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
             {game.rounds.length} {game.rounds.length === 1 ? "round" : "rounds"}
           </span>
         </div>
       </div>
 
       {/* Score Summary */}
-      <Card className="mb-6">
+      <Card className="mb-6 dark:bg-gray-800 dark:border-gray-700">
         <CardHeader>
-          <CardTitle className="text-phase10-darkBlue">Score Summary</CardTitle>
+          <CardTitle className="text-phase10-darkBlue dark:text-phase10-lightBlue">Score Summary</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
@@ -97,14 +124,19 @@ const GameDetail = () => {
               return (
                 <div
                   key={player.id}
-                  className="rounded-lg bg-gray-50 p-4 flex flex-col items-center"
+                  className="rounded-lg bg-gray-50 dark:bg-gray-700 p-4 flex items-center justify-between"
                 >
-                  <div className="text-lg font-semibold mb-1">{player.name}</div>
-                  <div className="text-3xl font-bold text-phase10-blue mb-1">
-                    {totalScore}
+                  <div className="flex items-center gap-3">
+                    <PlayerAvatar player={player} />
+                    <div>
+                      <div className="text-base font-semibold">{player.name}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Phase {currentPhase > 10 ? "Complete!" : currentPhase}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-500">
-                    Phase {currentPhase > 10 ? "Complete!" : currentPhase}
+                  <div className="text-3xl font-bold text-phase10-blue dark:text-phase10-lightBlue">
+                    {totalScore}
                   </div>
                 </div>
               );
@@ -116,7 +148,7 @@ const GameDetail = () => {
       {/* Rounds */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-700">Rounds</h3>
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Rounds</h3>
           <Button 
             onClick={toggleNewRound}
             variant={showNewRound ? "outline" : "default"}
@@ -128,9 +160,9 @@ const GameDetail = () => {
 
         {/* New Round Form */}
         {showNewRound && (
-          <Card className="mb-6 border-2 border-phase10-blue">
+          <Card className="mb-6 border-2 border-phase10-blue dark:bg-gray-800 dark:border-phase10-lightBlue">
             <CardHeader>
-              <CardTitle className="text-phase10-darkBlue">New Round</CardTitle>
+              <CardTitle className="text-phase10-darkBlue dark:text-phase10-lightBlue">New Round</CardTitle>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[280px] pr-4">
@@ -140,8 +172,11 @@ const GameDetail = () => {
                     const currentPhase = phases[playerId] || getCurrentPhase(game, playerId);
                     
                     return (
-                      <div key={playerId} className="pb-4 border-b last:border-0">
-                        <div className="font-medium mb-2">{player.name}</div>
+                      <div key={playerId} className="pb-4 border-b dark:border-gray-700 last:border-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <PlayerAvatar player={player} size="sm" />
+                          <span className="font-medium">{player.name}</span>
+                        </div>
                         
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -157,17 +192,22 @@ const GameDetail = () => {
                           </div>
                           
                           <div>
-                            <Label htmlFor={`phase-${playerId}`}>Phase ({currentPhase})</Label>
-                            <Input
-                              id={`phase-${playerId}`}
-                              type="number"
-                              value={phases[playerId] || ""}
-                              onChange={(e) => handlePhaseChange(playerId, e.target.value)}
-                              className="mt-1"
-                              min={1}
-                              max={10}
-                              placeholder={currentPhase.toString()}
-                            />
+                            <Label htmlFor={`phase-${playerId}`}>Phase</Label>
+                            <Select 
+                              value={phases[playerId]?.toString() || currentPhase.toString()} 
+                              onValueChange={(value) => handlePhaseChange(playerId, value)}
+                            >
+                              <SelectTrigger id={`phase-${playerId}`} className="mt-1">
+                                <SelectValue placeholder="Select phase" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map((phase) => (
+                                  <SelectItem key={phase} value={phase.toString()}>
+                                    Phase {phase}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         
@@ -199,8 +239,8 @@ const GameDetail = () => {
 
         {/* Round List */}
         {game.rounds.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-500">No rounds recorded yet.</p>
+          <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <p className="text-gray-500 dark:text-gray-400">No rounds recorded yet.</p>
             <Button 
               onClick={() => setShowNewRound(true)}
               className="mt-2 bg-phase10-blue hover:bg-phase10-darkBlue text-white"
@@ -212,11 +252,72 @@ const GameDetail = () => {
         ) : (
           <div className="space-y-4">
             {[...game.rounds].reverse().map((round, index) => (
-              <Card key={round.id}>
+              <Card key={round.id} className="dark:bg-gray-800">
                 <CardContent className="p-4">
-                  <h4 className="font-semibold text-gray-700 mb-3">
-                    Round {game.rounds.length - index}
-                  </h4>
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                      Round {game.rounds.length - index}
+                    </h4>
+                    <div className="flex space-x-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-gray-500 hover:text-phase10-blue"
+                            onClick={() => setEditRoundId(round.id)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        {editRoundId === round.id && (
+                          <DialogContent className="sm:max-w-md">
+                            <RoundEditor 
+                              roundId={round.id}
+                              gameId={game.id}
+                              playerScores={round.playerScores}
+                              players={game.players}
+                              onSave={handleUpdateRound}
+                              onCancel={() => setEditRoundId(null)}
+                            />
+                          </DialogContent>
+                        )}
+                      </Dialog>
+                      
+                      <AlertDialog 
+                        open={roundToDelete === round.id}
+                        onOpenChange={(open) => !open && setRoundToDelete(null)}
+                      >
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-gray-500 hover:text-red-600"
+                            onClick={() => setRoundToDelete(round.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Round</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this round? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleDeleteRound}
+                              className="bg-red-600 text-white hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {game.players.map((player) => {
                       const playerScore = round.playerScores.find(
@@ -228,15 +329,18 @@ const GameDetail = () => {
                       return (
                         <div
                           key={player.id}
-                          className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                          className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded"
                         >
-                          <div>
-                            <div className="font-medium">{player.name}</div>
-                            <div className="text-sm text-gray-500">
-                              Phase {playerScore.phase}
-                              {playerScore.completed && (
-                                <Check className="inline-block h-3 w-3 ml-1 text-phase10-green" />
-                              )}
+                          <div className="flex items-center gap-2">
+                            <PlayerAvatar player={player} size="sm" />
+                            <div>
+                              <div className="font-medium">{player.name}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                Phase {playerScore.phase}
+                                {playerScore.completed && (
+                                  <Check className="inline-block h-3 w-3 ml-1 text-phase10-green" />
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="text-xl font-bold">{playerScore.score}</div>

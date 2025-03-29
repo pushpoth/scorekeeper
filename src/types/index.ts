@@ -2,6 +2,10 @@
 export interface Player {
   id: string;
   name: string;
+  avatar?: {
+    type: "letter" | "emoji" | "image";
+    value: string;
+  };
 }
 
 export interface Round {
@@ -22,3 +26,5 @@ export interface Game {
   players: Player[];
   rounds: Round[];
 }
+
+export type ThemeMode = "light" | "dark";

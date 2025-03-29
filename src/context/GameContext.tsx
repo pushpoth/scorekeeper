@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Game, Player, Round, PlayerScore } from "@/types";
 import { v4 as uuidv4 } from "uuid";
@@ -13,6 +12,9 @@ interface GameContextType {
   getGame: (gameId: string) => Game | undefined;
   deleteGame: (gameId: string) => void;
   updatePlayerScore: (gameId: string, roundId: string, playerScore: PlayerScore) => void;
+  updateAllPlayerScores: (gameId: string, roundId: string, playerScores: PlayerScore[]) => void;
+  deleteRound: (gameId: string, roundId: string) => void;
+  updatePlayerAvatar: (playerId: string, avatar: Player["avatar"]) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -25,7 +27,6 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   const [games, setGames] = useState<Game[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
 
-  // Load data from localStorage on initial render
   useEffect(() => {
     const savedGames = localStorage.getItem("phase10-games");
     const savedPlayers = localStorage.getItem("phase10-players");
@@ -33,7 +34,6 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     if (savedGames) {
       try {
         const parsedGames = JSON.parse(savedGames);
-        // Convert date strings back to Date objects
         const gamesWithDates = parsedGames.map((game: any) => ({
           ...game,
           date: new Date(game.date)
@@ -58,7 +58,6 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     }
   }, []);
 
-  // Save to localStorage whenever games or players change
   useEffect(() => {
     localStorage.setItem("phase10-games", JSON.stringify(games));
   }, [games]);
@@ -96,7 +95,6 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       return "";
     }
     
-    // Check if player with the same name already exists
     if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
       toast({
         title: "Error",
@@ -187,6 +185,61 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     );
   };
 
+  const updateAllPlayerScores = (gameId: string, roundId: string, updatedPlayerScores: PlayerScore[]) => {
+    setGames(prevGames => 
+      prevGames.map(game => 
+        game.id === gameId 
+          ? {
+              ...game,
+              rounds: game.rounds.map(round => 
+                round.id === roundId 
+                  ? { ...round, playerScores: updatedPlayerScores }
+                  : round
+              )
+            }
+          : game
+      )
+    );
+    
+    toast({
+      title: "Round updated",
+      description: "The round scores have been updated"
+    });
+  };
+
+  const deleteRound = (gameId: string, roundId: string) => {
+    setGames(prevGames => 
+      prevGames.map(game => 
+        game.id === gameId 
+          ? {
+              ...game,
+              rounds: game.rounds.filter(round => round.id !== roundId)
+            }
+          : game
+      )
+    );
+    
+    toast({
+      title: "Round deleted",
+      description: "The round has been removed from the game"
+    });
+  };
+
+  const updatePlayerAvatar = (playerId: string, avatar: Player["avatar"]) => {
+    setPlayers(prevPlayers => 
+      prevPlayers.map(player => 
+        player.id === playerId 
+          ? { ...player, avatar }
+          : player
+      )
+    );
+    
+    toast({
+      title: "Avatar updated",
+      description: "The player's avatar has been updated"
+    });
+  };
+
   const value = {
     games,
     players,
@@ -195,7 +248,10 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     addRound,
     getGame,
     deleteGame,
-    updatePlayerScore
+    updatePlayerScore,
+    updateAllPlayerScores,
+    deleteRound,
+    updatePlayerAvatar
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
