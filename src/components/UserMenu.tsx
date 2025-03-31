@@ -1,6 +1,6 @@
 
 import React from "react";
-import { ChevronDown, Import, Export, LogOut, User } from "lucide-react";
+import { ChevronDown, Download, Upload, LogOut, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,8 +43,8 @@ const UserMenu: React.FC<UserMenuProps> = () => {
           
           <DropdownMenuItem onClick={() => setIsImportExportOpen(true)}>
             <div className="flex items-center gap-2 w-full">
-              <Import size={16} className="mr-1" />
-              <Export size={16} className="mr-1" />
+              <Upload size={16} className="mr-1" />
+              <Download size={16} className="mr-1" />
               <span>Import/Export</span>
             </div>
           </DropdownMenuItem>
