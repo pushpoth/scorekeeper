@@ -1,3 +1,4 @@
+
 import React from "react";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +15,8 @@ interface LayoutProps {
   showBackButton?: boolean;
   showMobileMenu?: boolean;
   subtitle?: string;
+  backLink?: string; // Added missing prop
+  hideSignOut?: boolean; // Added missing prop
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -22,11 +25,20 @@ const Layout: React.FC<LayoutProps> = ({
   rightContent, 
   showBackButton = false,
   showMobileMenu = true,
-  subtitle
+  subtitle,
+  backLink
 }) => {
   const isMobile = useMobile();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  
+  const handleBackClick = () => {
+    if (backLink) {
+      navigate(backLink);
+    } else {
+      navigate(-1);
+    }
+  };
   
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -40,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({
                   variant="ghost" 
                   size="icon" 
                   className="mr-2" 
-                  onClick={() => navigate(-1)}
+                  onClick={handleBackClick}
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </Button>

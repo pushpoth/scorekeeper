@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
@@ -100,7 +99,7 @@ const GameDetail = () => {
   };
 
   return (
-    <Layout title="Game Details" backLink="/">
+    <Layout title="Game Details" showBackButton backLink="/">
       <div className="mb-6">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">{formatDate(game.date)}</h2>

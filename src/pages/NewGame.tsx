@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
@@ -52,7 +51,7 @@ const NewGame = () => {
   };
 
   return (
-    <Layout title="New Game" backLink="/">
+    <Layout title="New Game" showBackButton backLink="/">
       <div className="space-y-6">
         <div>
           <Label htmlFor="date">Date</Label>
