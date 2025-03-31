@@ -20,6 +20,20 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'json' | 'csv'>(importType);
   const { importGameData, importCsvData } = useGameContext();
+  
+  // Reset state when dialog opens/closes
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      // Clear state when closing
+      setFile(null);
+      setError(null);
+    } else {
+      // Update active tab when opening
+      setActiveTab(importType);
+    }
+    // Propagate change to parent
+    onOpenChange(newOpen);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -59,7 +73,11 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
       }
       
       if (success) {
-        onOpenChange(false);
+        // First reset our state
+        setFile(null);
+        setError(null);
+        // Then close the dialog
+        handleOpenChange(false);
       }
     } catch (err) {
       console.error("Error reading file:", err);
@@ -68,12 +86,12 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
   };
   
   // Update active tab when importType changes
-  if (importType !== activeTab) {
+  if (importType !== activeTab && open) {
     setActiveTab(importType);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md dark:bg-gray-800 dark:border-gray-700">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -100,6 +118,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
                   type="file"
                   accept=".json"
                   onChange={handleFileChange}
+                  key={`json-${open}`} // Reset file input when dialog opens/closes
                 />
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -117,6 +136,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
                   type="file"
                   accept=".csv"
                   onChange={handleFileChange}
+                  key={`csv-${open}`} // Reset file input when dialog opens/closes
                 />
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -137,7 +157,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
         )}
 
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleImport} disabled={!file}>
