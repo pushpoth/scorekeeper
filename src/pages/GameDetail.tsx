@@ -1,358 +1,386 @@
+
 import { useState } from "react";
-import { useParams, Navigate } from "react-router-dom";
+import { useParams, Navigate, useLocation } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
-import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
 import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction, AlertDialogHeader, AlertDialogFooter } from "@/components/ui/alert-dialog";
-import { formatDate, calculateTotalScore, getPlayerName, getCurrentPhase } from "@/utils/gameUtils";
-import { PlayerScore } from "@/types";
-import { Check, Edit, Plus, Trash2 } from "lucide-react";
+  AlertDialog, 
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+  AlertDialogHeader,
+  AlertDialogFooter
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { formatDate, calculateTotalScore } from "@/utils/gameUtils";
+import Layout from "@/components/Layout";
 import PlayerAvatar from "@/components/PlayerAvatar";
 import RoundEditor from "@/components/RoundEditor";
+import { Trash2, Plus, Copy, Check } from "lucide-react";
+import { useSelection } from "@/hooks/useSelection";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 
 const GameDetail = () => {
-  const { gameId } = useParams<{ gameId: string }>();
-  const { games, players, addRound, getGame, deleteRound, updateAllPlayerScores } = useGameContext();
-  const [newScores, setNewScores] = useState<{ [playerId: string]: number }>({});
-  const [phases, setPhases] = useState<{ [playerId: string]: number }>({});
-  const [completed, setCompleted] = useState<{ [playerId: string]: boolean }>({});
-  const [showNewRound, setShowNewRound] = useState(false);
-  const [editRoundId, setEditRoundId] = useState<string | null>(null);
+  const { id, code } = useParams<{ id?: string; code?: string }>();
+  const location = useLocation();
+  const { 
+    games, 
+    getGame, 
+    getGameByCode, 
+    deleteRound, 
+    deleteMultipleRounds, 
+    loading 
+  } = useGameContext();
+  
+  const [isAddingRound, setIsAddingRound] = useState(false);
   const [roundToDelete, setRoundToDelete] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const roundSelection = useSelection();
+  
+  // Find the game by id or code
+  let game;
+  if (code) {
+    game = getGameByCode(code);
+  } else if (id) {
+    game = getGame(id);
+  }
+  
+  const isCodeRoute = location.pathname.includes('/code/');
 
-  const game = getGame(gameId || "");
-
-  if (!game) {
-    return <Navigate to="/" />;
+  // Redirect to 404 if game not found
+  if (!loading && !game) {
+    return <Navigate to="/404" />;
   }
 
-  const handleScoreChange = (playerId: string, value: string) => {
-    const score = parseInt(value) || 0;
-    setNewScores((prev) => ({ ...prev, [playerId]: score }));
-  };
-
-  const handlePhaseChange = (playerId: string, value: string) => {
-    const phase = parseInt(value) || 1;
-    setPhases((prev) => ({ ...prev, [playerId]: phase }));
-  };
-
-  const handleCompletedChange = (playerId: string, checked: boolean) => {
-    setCompleted((prev) => ({ ...prev, [playerId]: checked }));
-  };
-
-  const handleAddRound = () => {
-    const playerScores: PlayerScore[] = game.players.map((player) => ({
-      playerId: player.id,
-      score: newScores[player.id] || 0,
-      phase: phases[player.id] || getCurrentPhase(game, player.id),
-      completed: completed[player.id] || false,
-    }));
-
-    addRound(game.id, playerScores);
-    
-    // Reset form
-    setNewScores({});
-    setPhases({});
-    setCompleted({});
-    setShowNewRound(false);
-  };
-
-  const toggleNewRound = () => {
-    if (!showNewRound) {
-      // Initialize with current phases
-      const initialPhases: { [playerId: string]: number } = {};
-      game.players.forEach((player) => {
-        initialPhases[player.id] = getCurrentPhase(game, player.id);
-      });
-      setPhases(initialPhases);
-    }
-    setShowNewRound(!showNewRound);
-  };
-
-  const handleUpdateRound = (gameId: string, roundId: string, updatedScores: PlayerScore[]) => {
-    updateAllPlayerScores(gameId, roundId, updatedScores);
-    setEditRoundId(null);
-  };
+  // Show loading state while game is loading
+  if (loading || !game) {
+    return (
+      <Layout title="Loading Game..." showBackButton backLink="/games">
+        <div className="flex items-center justify-center h-40">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-phase10-blue mx-auto"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-300">Loading game details...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   const handleDeleteRound = () => {
-    if (roundToDelete && game) {
+    if (roundToDelete) {
       deleteRound(game.id, roundToDelete);
       setRoundToDelete(null);
     }
   };
 
+  const handleDeleteSelectedRounds = () => {
+    if (roundSelection.selectedItems.length > 0) {
+      deleteMultipleRounds(game.id, roundSelection.selectedItems);
+      roundSelection.deselectAll();
+    }
+  };
+
+  const handleCopyGameCode = () => {
+    if (game.uniqueCode) {
+      navigator.clipboard.writeText(game.uniqueCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+      
+      toast({
+        title: "Code copied",
+        description: "Game code copied to clipboard",
+      });
+    }
+  };
+  
+  // If we came via the code route but have a game ID, redirect to the ID route
+  if (isCodeRoute && game.id) {
+    return <Navigate to={`/games/${game.id}`} replace />;
+  }
+
   return (
-    <Layout title="Game Details" showBackButton backLink="/">
+    <Layout title="Game Details" showBackButton backLink="/games">
       <div className="mb-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
           <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">{formatDate(game.date)}</h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {game.rounds.length} {game.rounds.length === 1 ? "round" : "rounds"}
-          </span>
+          
+          {game.uniqueCode && (
+            <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+              <span>Code: {game.uniqueCode}</span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0" 
+                onClick={handleCopyGameCode}
+              >
+                {copiedCode ? (
+                  <Check size={14} className="text-green-500" />
+                ) : (
+                  <Copy size={14} />
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Players:</span>
+          {game.players.map((player) => (
+            <div 
+              key={player.id}
+              className="bg-gray-100 dark:bg-gray-700 rounded-full px-3 py-1 flex items-center gap-1.5"
+            >
+              <PlayerAvatar player={player} size="sm" />
+              <span>{player.name}</span>
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* Score Summary */}
-      <Card className="mb-6 dark:bg-gray-800 dark:border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-phase10-darkBlue dark:text-phase10-lightBlue">Score Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            {game.players.map((player) => {
-              const totalScore = calculateTotalScore(game, player.id);
-              const currentPhase = getCurrentPhase(game, player.id);
-              
-              return (
-                <div
-                  key={player.id}
-                  className="rounded-lg bg-gray-50 dark:bg-gray-700 p-4 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <PlayerAvatar player={player} />
-                    <div>
-                      <div className="text-base font-semibold">{player.name}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        Phase {currentPhase > 10 ? "Complete!" : currentPhase}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-3xl font-bold text-phase10-blue dark:text-phase10-lightBlue">
-                    {totalScore}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
+      
       {/* Rounds */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Rounds</h3>
-          <Button 
-            onClick={toggleNewRound}
-            variant={showNewRound ? "outline" : "default"}
-            className={!showNewRound ? "bg-phase10-blue hover:bg-phase10-darkBlue text-white" : ""}
-          >
-            {showNewRound ? "Cancel" : "Add Round"}
-          </Button>
-        </div>
-
-        {/* New Round Form */}
-        {showNewRound && (
-          <Card className="mb-6 border-2 border-phase10-blue dark:bg-gray-800 dark:border-phase10-lightBlue">
-            <CardHeader>
-              <CardTitle className="text-phase10-darkBlue dark:text-phase10-lightBlue">New Round</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[280px] pr-4">
-                <div className="space-y-6">
-                  {game.players.map((player) => {
-                    const playerId = player.id;
-                    const currentPhase = phases[playerId] || getCurrentPhase(game, playerId);
-                    
-                    return (
-                      <div key={playerId} className="pb-4 border-b dark:border-gray-700 last:border-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <PlayerAvatar player={player} size="sm" />
-                          <span className="font-medium">{player.name}</span>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor={`score-${playerId}`}>Score</Label>
-                            <Input
-                              id={`score-${playerId}`}
-                              type="number"
-                              value={newScores[playerId] || ""}
-                              onChange={(e) => handleScoreChange(playerId, e.target.value)}
-                              className="mt-1"
-                              min={0}
-                            />
-                          </div>
-                          
-                          <div>
-                            <Label htmlFor={`phase-${playerId}`}>Phase</Label>
-                            <Select 
-                              value={phases[playerId]?.toString() || currentPhase.toString()} 
-                              onValueChange={(value) => handlePhaseChange(playerId, value)}
-                            >
-                              <SelectTrigger id={`phase-${playerId}`} className="mt-1">
-                                <SelectValue placeholder="Select phase" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Array.from({ length: 10 }, (_, i) => i + 1).map((phase) => (
-                                  <SelectItem key={phase} value={phase.toString()}>
-                                    Phase {phase}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-2 flex items-center space-x-2">
-                          <Checkbox
-                            id={`completed-${playerId}`}
-                            checked={completed[playerId] || false}
-                            onCheckedChange={(checked) => 
-                              handleCompletedChange(playerId, checked === true)
-                            }
-                          />
-                          <Label htmlFor={`completed-${playerId}`}>Completed phase</Label>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-              
-              <Button
-                onClick={handleAddRound}
-                className="w-full mt-4 bg-phase10-blue hover:bg-phase10-darkBlue text-white"
-              >
-                <Plus className="h-4 w-4 mr-1" /> Add Round
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Round List */}
-        {game.rounds.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <p className="text-gray-500 dark:text-gray-400">No rounds recorded yet.</p>
+          <div className="flex gap-2">
+            {roundSelection.someSelected() && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete ({roundSelection.selectedItems.length})</span>
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="dark:bg-gray-800 dark:border-gray-700">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="dark:text-white">Delete Selected Rounds</AlertDialogTitle>
+                    <AlertDialogDescription className="dark:text-gray-400">
+                      Are you sure you want to delete {roundSelection.selectedItems.length} selected rounds? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="dark:bg-gray-700 dark:text-white">Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteSelectedRounds} className="bg-red-600 text-white hover:bg-red-700">
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            
             <Button 
-              onClick={() => setShowNewRound(true)}
-              className="mt-2 bg-phase10-blue hover:bg-phase10-darkBlue text-white"
-              size="sm"
+              size="sm" 
+              className="bg-phase10-blue hover:bg-phase10-darkBlue text-white"
+              onClick={() => setIsAddingRound(true)}
             >
-              <Plus className="h-4 w-4 mr-1" /> Add First Round
+              <Plus size={14} className="mr-1" />
+              Add Round
             </Button>
           </div>
+        </div>
+        
+        {/* Select All Controls */}
+        {game.rounds.length > 0 && (
+          <div className="flex items-center gap-2 mb-2">
+            <Checkbox 
+              id="select-all-rounds" 
+              checked={roundSelection.allSelected(game.rounds.length)}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  roundSelection.selectAll(game.rounds.map(r => r.id));
+                } else {
+                  roundSelection.deselectAll();
+                }
+              }}
+            />
+            <label htmlFor="select-all-rounds" className="text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+              {roundSelection.allSelected(game.rounds.length) 
+                ? "Deselect all" 
+                : roundSelection.someSelected()
+                  ? "Select all"
+                  : "Select all rounds"}
+            </label>
+          </div>
+        )}
+        
+        {game.rounds.length === 0 ? (
+          <p className="text-gray-500 dark:text-gray-400 text-center py-6">
+            No rounds yet. Add your first round to start tracking scores.
+          </p>
         ) : (
           <div className="space-y-4">
-            {[...game.rounds].reverse().map((round, index) => (
-              <Card key={round.id} className="dark:bg-gray-800">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-semibold text-gray-700 dark:text-gray-300">
-                      Round {game.rounds.length - index}
-                    </h4>
-                    <div className="flex space-x-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-gray-500 hover:text-phase10-blue"
-                            onClick={() => setEditRoundId(round.id)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        {editRoundId === round.id && (
-                          <DialogContent className="sm:max-w-md">
-                            <RoundEditor 
-                              roundId={round.id}
-                              gameId={game.id}
-                              playerScores={round.playerScores}
-                              players={game.players}
-                              onSave={handleUpdateRound}
-                              onCancel={() => setEditRoundId(null)}
-                            />
-                          </DialogContent>
-                        )}
-                      </Dialog>
+            {game.rounds.map((round, index) => {
+              // Calculate per-round totals
+              const roundScores = round.playerScores.map(ps => {
+                const player = game.players.find(p => p.id === ps.playerId);
+                return {
+                  player: player,
+                  ...ps
+                };
+              });
+              
+              return (
+                <Card key={round.id} className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Checkbox 
+                          checked={roundSelection.isSelected(round.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              roundSelection.selectItem(round.id);
+                            } else {
+                              roundSelection.deselectItem(round.id);
+                            }
+                          }}
+                          className="mr-1"
+                        />
+                        <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                          Round {index + 1}
+                        </h4>
+                      </div>
                       
-                      <AlertDialog 
-                        open={roundToDelete === round.id}
-                        onOpenChange={(open) => !open && setRoundToDelete(null)}
-                      >
+                      <AlertDialog open={roundToDelete === round.id} onOpenChange={(open) => !open && setRoundToDelete(null)}>
                         <AlertDialogTrigger asChild>
                           <Button 
                             variant="ghost" 
-                            size="sm" 
-                            className="text-gray-500 hover:text-red-600"
+                            size="sm"
+                            className="text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
                             onClick={() => setRoundToDelete(round.id)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 size={16} />
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
+                        <AlertDialogContent className="dark:bg-gray-800 dark:border-gray-700">
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Round</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this round? This action cannot be undone.
+                            <AlertDialogTitle className="dark:text-white">Delete Round</AlertDialogTitle>
+                            <AlertDialogDescription className="dark:text-gray-400">
+                              Are you sure you want to delete Round {index + 1}? This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={handleDeleteRound}
-                              className="bg-red-600 text-white hover:bg-red-700"
-                            >
+                            <AlertDialogCancel className="dark:bg-gray-700 dark:text-white">Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteRound} className="bg-red-600 text-white hover:bg-red-700">
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {game.players.map((player) => {
-                      const playerScore = round.playerScores.find(
-                        (ps) => ps.playerId === player.id
-                      );
-                      
-                      if (!playerScore) return null;
-                      
-                      return (
-                        <div
-                          key={player.id}
-                          className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded"
+                    
+                    <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                      {roundScores.map((score) => (
+                        <div 
+                          key={score.playerId}
+                          className="flex-1 min-w-[200px] bg-gray-50 dark:bg-gray-700 p-3 rounded-lg"
                         >
-                          <div className="flex items-center gap-2">
-                            <PlayerAvatar player={player} size="sm" />
-                            <div>
-                              <div className="font-medium">{player.name}</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                Phase {playerScore.phase}
-                                {playerScore.completed && (
-                                  <Check className="inline-block h-3 w-3 ml-1 text-phase10-green" />
-                                )}
-                              </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {score.player && <PlayerAvatar player={score.player} size="sm" />}
+                              <span className="font-medium">{score.player?.name}</span>
                             </div>
+                            <Badge 
+                              variant={score.completed ? "default" : "outline"} 
+                              className={score.completed 
+                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                                : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-transparent dark:border-amber-700 dark:text-amber-400"
+                              }
+                            >
+                              Phase {score.phase}
+                              {score.completed ? " ✓" : ""}
+                            </Badge>
                           </div>
-                          <div className="text-xl font-bold">{playerScore.score}</div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Score:</span>
+                            <span className="text-lg font-bold">{score.score}</span>
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      ))}
+                    </div>
+                    
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                        {game.players.map(player => {
+                          // Calculate running total for this player up to this round
+                          const runningTotal = game.rounds
+                            .slice(0, index + 1)
+                            .reduce((sum, r) => {
+                              const playerScore = r.playerScores.find(ps => ps.playerId === player.id);
+                              return sum + (playerScore ? playerScore.score : 0);
+                            }, 0);
+                          
+                          return (
+                            <div key={player.id} className="flex items-center gap-1">
+                              <PlayerAvatar player={player} size="sm" />
+                              <span className="font-medium">{player.name}:</span>
+                              <span>{runningTotal}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
+      
+      {/* Final Scores */}
+      <div className="mt-8 mb-16">
+        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Final Scores</h3>
+        <Card className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {game.players
+                .map(player => ({
+                  player,
+                  score: calculateTotalScore(game, player.id)
+                }))
+                .sort((a, b) => a.score - b.score)
+                .map((item, index) => (
+                  <div 
+                    key={item.player.id}
+                    className={`flex items-center justify-between p-2 rounded-lg ${
+                      index === 0 
+                        ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" 
+                        : "bg-gray-50 dark:bg-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {index === 0 && <Badge className="bg-green-500">Winner</Badge>}
+                      <PlayerAvatar player={item.player} size="sm" />
+                      <span className="font-medium">{item.player.name}</span>
+                    </div>
+                    <span className={`text-lg font-bold ${
+                      index === 0 ? "text-green-600 dark:text-green-400" : ""
+                    }`}>
+                      {item.score}
+                    </span>
+                  </div>
+                ))
+              }
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* Round Editor Dialog */}
+      <RoundEditor
+        gameId={game.id}
+        players={game.players}
+        open={isAddingRound}
+        onOpenChange={setIsAddingRound}
+      />
     </Layout>
   );
 };

@@ -23,12 +23,18 @@ const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, size = "md" }) => {
     }
   };
   
+  // Use player's color as background if available
+  const style = player.color ? {
+    backgroundColor: player.color,
+    color: '#fff' // White text for contrast
+  } : undefined;
+  
   return (
     <Avatar className={sizeClasses[size]}>
       {player.avatar?.type === "image" && (
         <AvatarImage src={player.avatar.value} alt={player.name} />
       )}
-      <AvatarFallback className="bg-phase10-blue text-white">
+      <AvatarFallback style={style}>
         {getAvatarFallback()}
       </AvatarFallback>
     </Avatar>

@@ -16,6 +16,7 @@ export interface Round {
 }
 
 export interface PlayerScore {
+  id?: string; // Added ID field for DB persistance
   playerId: string;
   score: number;
   phase: number;
@@ -24,6 +25,7 @@ export interface PlayerScore {
 
 export interface Game {
   id: string;
+  uniqueCode?: string; // Added unique code field
   date: Date;
   players: Player[];
   rounds: Round[];
@@ -43,4 +45,17 @@ export interface CsvGameData {
   playerScores: number[];
   playerPhases: number[];
   phaseCompleted: boolean[];
+}
+
+// Selection interfaces for multi-select functionality
+export interface Selection {
+  selectedItems: string[];
+  selectItem: (id: string) => void;
+  deselectItem: (id: string) => void;
+  toggleItem: (id: string) => void;
+  selectAll: (ids: string[]) => void;
+  deselectAll: () => void;
+  isSelected: (id: string) => boolean;
+  someSelected: () => boolean;
+  allSelected: (totalItems: number) => boolean;
 }

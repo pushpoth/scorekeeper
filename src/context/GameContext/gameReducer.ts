@@ -15,13 +15,16 @@ export type GameAction =
   | { type: 'ADD_PLAYER'; payload: Player }
   | { type: 'ADD_ROUND'; payload: { gameId: string; round: { id: string; playerScores: PlayerScore[] } } }
   | { type: 'DELETE_GAME'; payload: string }
+  | { type: 'DELETE_MULTIPLE_GAMES'; payload: string[] }
   | { type: 'UPDATE_PLAYER_SCORE'; payload: { gameId: string; roundId: string; playerScore: PlayerScore } }
   | { type: 'UPDATE_ALL_PLAYER_SCORES'; payload: { gameId: string; roundId: string; playerScores: PlayerScore[] } }
   | { type: 'DELETE_ROUND'; payload: { gameId: string; roundId: string } }
+  | { type: 'DELETE_MULTIPLE_ROUNDS'; payload: { gameId: string; roundIds: string[] } }
   | { type: 'UPDATE_PLAYER_AVATAR'; payload: { playerId: string; avatar: Player['avatar'] } }
   | { type: 'UPDATE_PLAYER_MANUAL_SCORE'; payload: { playerId: string; manualTotal?: number } }
   | { type: 'ADD_MULTIPLE_PLAYERS'; payload: Player[] }
-  | { type: 'ADD_MULTIPLE_GAMES'; payload: Game[] };
+  | { type: 'ADD_MULTIPLE_GAMES'; payload: Game[] }
+  | { type: 'UPDATE_GAME_UNIQUE_CODE'; payload: { gameId: string; uniqueCode: string } };
 
 export interface GameState {
   games: Game[];
@@ -85,6 +88,12 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         games: state.games.filter(game => game.id !== action.payload)
       };
       
+    case 'DELETE_MULTIPLE_GAMES':
+      return {
+        ...state,
+        games: state.games.filter(game => !action.payload.includes(game.id))
+      };
+      
     case 'UPDATE_PLAYER_SCORE':
       return {
         ...state,
@@ -139,6 +148,19 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         )
       };
       
+    case 'DELETE_MULTIPLE_ROUNDS':
+      return {
+        ...state,
+        games: state.games.map(game => 
+          game.id === action.payload.gameId 
+            ? {
+                ...game,
+                rounds: game.rounds.filter(round => !action.payload.roundIds.includes(round.id))
+              }
+            : game
+        )
+      };
+      
     case 'UPDATE_PLAYER_AVATAR':
       return {
         ...state,
@@ -156,6 +178,16 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           player.id === action.payload.playerId 
             ? { ...player, manualTotal: action.payload.manualTotal }
             : player
+        )
+      };
+      
+    case 'UPDATE_GAME_UNIQUE_CODE':
+      return {
+        ...state,
+        games: state.games.map(game =>
+          game.id === action.payload.gameId
+            ? { ...game, uniqueCode: action.payload.uniqueCode }
+            : game
         )
       };
       

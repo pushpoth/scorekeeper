@@ -2,28 +2,22 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Plus, LogOut } from 'lucide-react';
-import ExportImportModal from '@/components/ExportImportModal';
-import { useAuth } from '@/context/AuthContext';
+import { Plus } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { MoonIcon, SunIcon } from 'lucide-react';
+import UserMenu from './UserMenu';
 
 interface GameActionsMenuProps {
   showNewGameButton?: boolean;
 }
 
 const GameActionsMenu: React.FC<GameActionsMenuProps> = ({ showNewGameButton = true }) => {
-  const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-
-  const handleSignOut = async () => {
-    await signOut();
-  };
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button
-        variant="outline"
+        variant="ghost"
         size="icon"
         onClick={toggleTheme}
         className="mr-2"
@@ -40,24 +34,7 @@ const GameActionsMenu: React.FC<GameActionsMenuProps> = ({ showNewGameButton = t
         </Link>
       )}
       
-      <ExportImportModal 
-        trigger={
-          <Button variant="outline">
-            Import/Export
-          </Button>
-        }
-      />
-      
-      {user && (
-        <Button 
-          variant="outline" 
-          className="ml-2" 
-          onClick={handleSignOut}
-          title="Sign out"
-        >
-          <LogOut size={16} className="mr-1" /> Sign Out
-        </Button>
-      )}
+      <UserMenu />
     </div>
   );
 };

@@ -1,234 +1,185 @@
 
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AlertCircle, Download, Upload } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import React, { useState, useCallback } from 'react';
 import { useGameContext } from "@/context/GameContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/hooks/use-toast";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { toast } from "@/hooks/use-toast";
 
 interface ExportImportModalProps {
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-const ExportImportModal = ({ trigger }: ExportImportModalProps) => {
-  const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
-  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
-  const [importFormat, setImportFormat] = useState<'json' | 'csv'>('json');
-  const [open, setOpen] = useState(false);
-  const [key, setKey] = useState(0); // Used to reset the file input
-
-  const { exportGameData, exportCsvData, importGameData, importCsvData } = useGameContext();
-  const { toast } = useToast();
+const ExportImportModal: React.FC<ExportImportModalProps> = ({
+  trigger,
+  open,
+  onOpenChange
+}) => {
+  const [activeTab, setActiveTab] = useState<"export" | "import">("export");
+  const [exportType, setExportType] = useState<"json" | "csv">("json");
+  const [importType, setImportType] = useState<"json" | "csv">("json");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isControlled] = useState(open !== undefined && onOpenChange !== undefined);
+  const [internalOpen, setInternalOpen] = useState(false);
   
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!open) {
-      // Small delay to ensure the modal is fully closed before resetting state
-      const timer = setTimeout(() => {
-        setFile(null);
-        setError(null);
-        setKey(prev => prev + 1);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    const selectedFile = e.target.files?.[0];
-    
-    if (!selectedFile) return;
-    
-    if (importFormat === 'json' && !selectedFile.name.toLowerCase().endsWith('.json')) {
-      setError("Please select a JSON file.");
-      setFile(null);
-      return;
-    }
-    
-    if (importFormat === 'csv' && !selectedFile.name.toLowerCase().endsWith('.csv')) {
-      setError("Please select a CSV file.");
-      setFile(null);
-      return;
-    }
-    
-    setFile(selectedFile);
-  };
-
+  const { exportGameData, exportCsvData, importGameData, importCsvData } = useGameContext();
+  
   const handleExport = () => {
-    try {
-      if (exportFormat === 'json') {
-        exportGameData();
-      } else {
-        exportCsvData();
-      }
-      
-      setOpen(false);
-      
-      toast({
-        title: "Export successful",
-        description: `Your game data has been exported as ${exportFormat.toUpperCase()}`
-      });
-    } catch (err) {
-      console.error("Export error:", err);
-      setError(`Failed to export data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    if (exportType === "json") {
+      exportGameData();
+    } else {
+      exportCsvData();
     }
   };
-
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setImportFile(e.target.files[0]);
+    }
+  };
+  
+  const resetForm = useCallback(() => {
+    setImportFile(null);
+    
+    // Reset the file input value by recreating the element
+    const fileInput = document.getElementById('import-file') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  }, []);
+  
   const handleImport = async () => {
-    if (!file) {
-      setError("Please select a file to import.");
+    if (!importFile) {
+      toast({
+        title: "No file selected",
+        description: "Please select a file to import",
+        variant: "destructive",
+      });
       return;
     }
-
+    
     try {
-      const text = await file.text();
-      
+      const fileContent = await importFile.text();
       let success = false;
-      if (importFormat === 'json') {
-        success = importGameData(text);
+      
+      if (importType === "json") {
+        success = importGameData(fileContent);
       } else {
-        success = importCsvData(text);
+        success = importCsvData(fileContent);
       }
       
       if (success) {
-        toast({
-          title: "Import successful",
-          description: `Your game data has been imported successfully`
-        });
+        // Reset the form after successful import
+        resetForm();
         
-        // Reset and close modal
-        setFile(null);
-        setError(null);
-        setOpen(false);
+        // Close the modal after successful import
+        if (isControlled && onOpenChange) {
+          onOpenChange(false);
+        } else {
+          setInternalOpen(false);
+        }
       }
-    } catch (err) {
-      console.error("Import error:", err);
-      setError(`Failed to import data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } catch (error) {
+      console.error("Import error:", error);
+      toast({
+        title: "Import failed",
+        description: "An error occurred while importing the file",
+        variant: "destructive",
+      });
     }
   };
-
+  
+  // Handle open state change
+  const handleOpenChange = (newOpen: boolean) => {
+    if (isControlled) {
+      if (onOpenChange) onOpenChange(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+    
+    if (!newOpen) {
+      // Reset form when dialog closes
+      resetForm();
+    }
+  };
+  
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || <Button variant="outline">Import/Export</Button>}
-      </DialogTrigger>
+    <Dialog 
+      open={isControlled ? open : internalOpen} 
+      onOpenChange={handleOpenChange}
+    >
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-md dark:bg-gray-800 dark:border-gray-700">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {activeTab === 'export' ? <Download className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
-            {activeTab === 'export' ? 'Export Game Data' : 'Import Game Data'}
-          </DialogTitle>
-          <DialogDescription>
-            {activeTab === 'export' 
-              ? 'Export your Phase 10 game data to save or share it' 
-              : 'Upload your exported Phase 10 game data to restore your games and players'}
-          </DialogDescription>
+          <DialogTitle className="dark:text-white">Import/Export Data</DialogTitle>
         </DialogHeader>
-        
-        <Tabs 
-          value={activeTab} 
-          onValueChange={(value) => setActiveTab(value as 'export' | 'import')} 
-          className="w-full"
-        >
+        <Tabs defaultValue="export" value={activeTab} onValueChange={(value) => setActiveTab(value as "export" | "import")} className="mt-2">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="export">Export</TabsTrigger>
             <TabsTrigger value="import">Import</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="export" className="pt-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Export Format</Label>
-                <RadioGroup 
-                  value={exportFormat} 
-                  onValueChange={(value) => setExportFormat(value as 'json' | 'csv')}
-                  className="flex space-x-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="json" id="export-json" />
-                    <Label htmlFor="export-json">JSON</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="csv" id="export-csv" />
-                    <Label htmlFor="export-csv">CSV</Label>
-                  </div>
-                </RadioGroup>
+          {/* Export Tab */}
+          <TabsContent value="export" className="mt-4">
+            <RadioGroup
+              value={exportType}
+              onValueChange={(value) => setExportType(value as "json" | "csv")}
+              className="mb-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="json" id="export-json" />
+                <Label htmlFor="export-json">JSON Format (Recommended)</Label>
               </div>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {exportFormat === 'json'
-                  ? 'Export as JSON to save all game data, players, scores, and settings.'
-                  : 'Export as CSV for compatibility with spreadsheet applications.'}
-              </p>
-
-              <Button onClick={handleExport} className="w-full mt-4">
-                <Download className="mr-2 h-4 w-4" />
-                Export as {exportFormat.toUpperCase()}
-              </Button>
-            </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <RadioGroupItem value="csv" id="export-csv" />
+                <Label htmlFor="export-csv">CSV Format</Label>
+              </div>
+            </RadioGroup>
+            <Button 
+              onClick={handleExport} 
+              className="w-full bg-phase10-blue hover:bg-phase10-darkBlue text-white"
+            >
+              Export Data
+            </Button>
           </TabsContent>
           
-          <TabsContent value="import" className="pt-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Import Format</Label>
-                <RadioGroup 
-                  value={importFormat} 
-                  onValueChange={(value) => setImportFormat(value as 'json' | 'csv')}
-                  className="flex space-x-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="json" id="import-json" />
-                    <Label htmlFor="import-json">JSON</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="csv" id="import-csv" />
-                    <Label htmlFor="import-csv">CSV</Label>
-                  </div>
-                </RadioGroup>
+          {/* Import Tab */}
+          <TabsContent value="import" className="mt-4">
+            <RadioGroup
+              value={importType}
+              onValueChange={(value) => setImportType(value as "json" | "csv")}
+              className="mb-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="json" id="import-json" />
+                <Label htmlFor="import-json">JSON Format</Label>
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="importFile">Select {importFormat.toUpperCase()} file</Label>
-                <Input
-                  id="importFile"
-                  key={`${importFormat}-${key}`} 
-                  type="file"
-                  accept={`.${importFormat}`}
-                  onChange={handleFileChange}
-                />
+              <div className="flex items-center space-x-2 mt-2">
+                <RadioGroupItem value="csv" id="import-csv" />
+                <Label htmlFor="import-csv">CSV Format</Label>
               </div>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {importFormat === 'json'
-                  ? 'Import a previously exported Phase 10 score tracker JSON file.'
-                  : 'Import a CSV file with columns for date, player scores, phases, and completion status.'}
-              </p>
-              
-              {importFormat === 'csv' && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Example headers: date, PlayerName_score, PlayerName_phase, PlayerName_completed
-                </p>
-              )}
+            </RadioGroup>
+            <div className="mb-4">
+              <Label htmlFor="import-file">Select File</Label>
+              <Input 
+                id="import-file" 
+                type="file" 
+                accept={importType === "json" ? ".json" : ".csv"} 
+                onChange={handleFileChange}
+                className="mt-1"
+              />
             </div>
-            
-            {error && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            <Button onClick={handleImport} disabled={!file} className="w-full mt-4">
-              <Upload className="mr-2 h-4 w-4" />
-              Import {importFormat.toUpperCase()}
+            <Button 
+              onClick={handleImport} 
+              disabled={!importFile}
+              className="w-full bg-phase10-blue hover:bg-phase10-darkBlue text-white"
+            >
+              Import Data
             </Button>
           </TabsContent>
         </Tabs>
