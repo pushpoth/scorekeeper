@@ -1,5 +1,5 @@
 
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { GameProvider } from "./context/GameContext";
 import { AuthProvider as AuthContextProvider } from "./context/AuthContext";
@@ -18,43 +18,41 @@ function App() {
     <AuthContextProvider>
       <ThemeProvider>
         <GameProvider>
-          <Router>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Home />} />
-              <Route path="/auth" element={
-                <AuthProvider requireAuth={false}>
-                  <Auth />
-                </AuthProvider>
-              } />
-              
-              {/* Protected routes */}
-              <Route path="/games" element={
-                <AuthProvider>
-                  <Index />
-                </AuthProvider>
-              } />
-              <Route path="/games/:id" element={
-                <AuthProvider>
-                  <GameDetail />
-                </AuthProvider>
-              } />
-              <Route path="/games/new" element={
-                <AuthProvider>
-                  <NewGame />
-                </AuthProvider>
-              } />
-              <Route path="/code/:code" element={
-                <AuthProvider>
-                  <GameDetail />
-                </AuthProvider>
-              } />
-              
-              {/* Fallback routes */}
-              <Route path="/404" element={<NotFound />} />
-              <Route path="*" element={<Navigate to="/404" />} />
-            </Routes>
-          </Router>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Home />} />
+            <Route path="/auth" element={
+              <AuthProvider requireAuth={false}>
+                <Auth />
+              </AuthProvider>
+            } />
+            
+            {/* Protected routes */}
+            <Route path="/games" element={
+              <AuthProvider>
+                <Index />
+              </AuthProvider>
+            } />
+            <Route path="/games/:id" element={
+              <AuthProvider>
+                <GameDetail />
+              </AuthProvider>
+            } />
+            <Route path="/games/new" element={
+              <AuthProvider>
+                <NewGame />
+              </AuthProvider>
+            } />
+            <Route path="/code/:code" element={
+              <AuthProvider>
+                <GameDetail />
+              </AuthProvider>
+            } />
+            
+            {/* Fallback routes */}
+            <Route path="/404" element={<NotFound />} />
+            <Route path="*" element={<Navigate to="/404" />} />
+          </Routes>
           <Toaster />
         </GameProvider>
       </ThemeProvider>

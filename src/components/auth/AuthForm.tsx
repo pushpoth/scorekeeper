@@ -35,7 +35,7 @@ const AuthForm = () => {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
-          navigate('/');
+          navigate('/games');
         }
       } else {
         const { error, data } = await signUp(email, password, { name, playerName: name });
@@ -46,7 +46,7 @@ const AuthForm = () => {
             title: "Account created",
             description: "Your account has been successfully created!",
           });
-          navigate('/');
+          navigate('/games');
         }
       }
     } catch (error) {

@@ -2,7 +2,6 @@
 import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User, AuthError } from '@supabase/supabase-js';
-import { useNavigate } from 'react-router-dom';
 
 interface AuthState {
   user: User | null;
@@ -24,7 +23,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     session: null,
     loading: true,
   });
-  const navigate = useNavigate();
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -35,11 +33,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           session,
           user: session?.user ?? null,
         }));
-        
-        // If user signs out, redirect to home page
-        if (event === 'SIGNED_OUT') {
-          navigate('/');
-        }
       }
     );
 
@@ -54,7 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     const result = await supabase.auth.signInWithPassword({

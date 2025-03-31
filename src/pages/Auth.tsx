@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,8 +30,10 @@ const Auth = () => {
     
     setIsLoading(true);
     try {
-      await signIn(email, password);
-      navigate(returnPath);
+      const { error } = await signIn(email, password);
+      if (!error) {
+        navigate(returnPath);
+      }
     } catch (error) {
       // Error is handled in the auth context
       console.error("Login error:", error);
@@ -48,10 +50,14 @@ const Auth = () => {
     try {
       // Use name as playerName if not provided
       const playerNameToUse = playerName.trim() || name.trim();
-      await signUp(email, password, name, playerNameToUse);
+      const metadata = { name, playerName: playerNameToUse };
       
-      // Switch to login tab after registration
-      setActiveTab("login");
+      const { error } = await signUp(email, password, metadata);
+      
+      if (!error) {
+        // Switch to login tab after registration
+        setActiveTab("login");
+      }
     } catch (error) {
       // Error is handled in the auth context
       console.error("Register error:", error);

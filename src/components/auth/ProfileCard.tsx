@@ -1,19 +1,21 @@
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 const ProfileCard = () => {
   const { user, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
   
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
       await signOut();
+      navigate('/');
       toast({
         title: "Signed out",
         description: "You have been successfully signed out",
