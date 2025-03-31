@@ -296,7 +296,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           // Create game object
           const game: Game = {
             id: dbGame.id,
-            uniqueCode: dbGame.unique_code || generateUniqueCode(),
+            uniqueCode: dbGame.unique_code || generateUniqueCode(), // Use the correct property name
             date: new Date(dbGame.date),
             players: gamePlayerObjects,
             rounds: appRounds
@@ -363,7 +363,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           id: game.id,
           date: game.date.toISOString(),
           user_id: user.id,
-          unique_code: uniqueCode
+          unique_code: uniqueCode // Use the correct property name
         };
         
         const { error: gameError } = await supabase

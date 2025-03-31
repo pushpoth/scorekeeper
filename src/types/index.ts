@@ -75,7 +75,7 @@ export interface DbPlayer {
 export interface DbGame {
   id: string;
   date: string;
-  unique_code?: string;
+  unique_code?: string; // Ensure this property exists
   user_id?: string;
   created_at?: string;
   updated_at?: string;
