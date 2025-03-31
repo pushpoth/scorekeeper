@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { AlertCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useGameContext } from "@/context/GameContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 interface ImportDataDialogProps {
   open: boolean;
@@ -19,21 +20,25 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'json' | 'csv'>(importType);
+  const [key, setKey] = useState(0); // Used to reset file input
   const { importGameData, importCsvData } = useGameContext();
+  const { toast } = useToast();
   
   // Reset state when dialog opens/closes
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      // Clear state when closing
-      setFile(null);
-      setError(null);
+  useEffect(() => {
+    if (!open) {
+      // Small delay to ensure dialog is fully closed
+      const timer = setTimeout(() => {
+        setFile(null);
+        setError(null);
+        setKey(prev => prev + 1);
+      }, 300);
+      return () => clearTimeout(timer);
     } else {
       // Update active tab when opening
       setActiveTab(importType);
     }
-    // Propagate change to parent
-    onOpenChange(newOpen);
-  };
+  }, [open, importType]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -73,15 +78,19 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
       }
       
       if (success) {
-        // First reset our state
+        toast({
+          title: "Import successful",
+          description: `Your game data has been imported successfully`
+        });
+        
+        // Reset state and close dialog
         setFile(null);
         setError(null);
-        // Then close the dialog
-        handleOpenChange(false);
+        onOpenChange(false);
       }
     } catch (err) {
       console.error("Error reading file:", err);
-      setError("Failed to read the selected file.");
+      setError(`Failed to read the selected file: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
   
@@ -91,7 +100,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md dark:bg-gray-800 dark:border-gray-700">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -118,7 +127,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
                   type="file"
                   accept=".json"
                   onChange={handleFileChange}
-                  key={`json-${open}`} // Reset file input when dialog opens/closes
+                  key={`json-${key}`} // Reset file input
                 />
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -136,7 +145,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
                   type="file"
                   accept=".csv"
                   onChange={handleFileChange}
-                  key={`csv-${open}`} // Reset file input when dialog opens/closes
+                  key={`csv-${key}`} // Reset file input
                 />
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -157,7 +166,7 @@ const ImportDataDialog = ({ open, onOpenChange, importType = 'json' }: ImportDat
         )}
 
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleImport} disabled={!file}>

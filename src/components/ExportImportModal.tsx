@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useGameContext } from "@/context/GameContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from "@/hooks/use-toast";
 
 interface ExportImportModalProps {
   trigger?: React.ReactNode;
@@ -21,17 +22,23 @@ const ExportImportModal = ({ trigger }: ExportImportModalProps) => {
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
   const [importFormat, setImportFormat] = useState<'json' | 'csv'>('json');
   const [open, setOpen] = useState(false);
+  const [key, setKey] = useState(0); // Used to reset the file input
 
   const { exportGameData, exportCsvData, importGameData, importCsvData } = useGameContext();
+  const { toast } = useToast();
   
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      // Reset state when closing
-      setFile(null);
-      setError(null);
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!open) {
+      // Small delay to ensure the modal is fully closed before resetting state
+      const timer = setTimeout(() => {
+        setFile(null);
+        setError(null);
+        setKey(prev => prev + 1);
+      }, 300);
+      return () => clearTimeout(timer);
     }
-    setOpen(newOpen);
-  };
+  }, [open]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -55,12 +62,23 @@ const ExportImportModal = ({ trigger }: ExportImportModalProps) => {
   };
 
   const handleExport = () => {
-    if (exportFormat === 'json') {
-      exportGameData();
-    } else {
-      exportCsvData();
+    try {
+      if (exportFormat === 'json') {
+        exportGameData();
+      } else {
+        exportCsvData();
+      }
+      
+      setOpen(false);
+      
+      toast({
+        title: "Export successful",
+        description: `Your game data has been exported as ${exportFormat.toUpperCase()}`
+      });
+    } catch (err) {
+      console.error("Export error:", err);
+      setError(`Failed to export data: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-    handleOpenChange(false);
   };
 
   const handleImport = async () => {
@@ -80,20 +98,24 @@ const ExportImportModal = ({ trigger }: ExportImportModalProps) => {
       }
       
       if (success) {
-        // First reset our state
+        toast({
+          title: "Import successful",
+          description: `Your game data has been imported successfully`
+        });
+        
+        // Reset and close modal
         setFile(null);
         setError(null);
-        // Then close the dialog
-        handleOpenChange(false);
+        setOpen(false);
       }
     } catch (err) {
-      console.error("Error reading file:", err);
-      setError("Failed to read the selected file.");
+      console.error("Import error:", err);
+      setError(`Failed to import data: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || <Button variant="outline">Import/Export</Button>}
       </DialogTrigger>
@@ -110,7 +132,11 @@ const ExportImportModal = ({ trigger }: ExportImportModalProps) => {
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'export' | 'import')} className="w-full">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={(value) => setActiveTab(value as 'export' | 'import')} 
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="export">Export</TabsTrigger>
             <TabsTrigger value="import">Import</TabsTrigger>
@@ -173,10 +199,10 @@ const ExportImportModal = ({ trigger }: ExportImportModalProps) => {
                 <Label htmlFor="importFile">Select {importFormat.toUpperCase()} file</Label>
                 <Input
                   id="importFile"
+                  key={`${importFormat}-${key}`} 
                   type="file"
                   accept={`.${importFormat}`}
                   onChange={handleFileChange}
-                  key={`${importFormat}-${open}`} // Reset when format changes or dialog opens/closes
                 />
               </div>
               

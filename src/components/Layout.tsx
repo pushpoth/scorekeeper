@@ -1,106 +1,82 @@
-
 import React from "react";
-import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, LogOut } from "lucide-react";
-import { useTheme } from "@/context/ThemeContext";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAuth } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
+import MobileMenu from "@/components/MobileMenu";
+import { useMobile } from "@/hooks/useMobile";
+import { useTheme } from "@/context/ThemeContext";
 
 interface LayoutProps {
   children: React.ReactNode;
   title: string;
-  backLink?: string;
-  backText?: string;
   rightContent?: React.ReactNode;
-  hideSignOut?: boolean;
+  showBackButton?: boolean;
+  showMobileMenu?: boolean;
+  subtitle?: string;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
   children, 
   title, 
-  backLink, 
-  backText,
-  rightContent,
-  hideSignOut = false
+  rightContent, 
+  showBackButton = false,
+  showMobileMenu = true,
+  subtitle
 }) => {
+  const isMobile = useMobile();
   const { theme, toggleTheme } = useTheme();
-  const { user, signOut } = useAuth();
-  
-  const handleSignOut = async () => {
-    await signOut();
-  };
+  const navigate = useNavigate();
   
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <header className="w-full bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-sm">
-        <div className="max-w-7xl mx-auto p-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-2">
-            <div className="flex items-center w-full md:w-auto justify-between md:justify-start">
-              <h1 className="text-2xl md:text-3xl font-bold text-phase10-darkBlue dark:text-phase10-lightBlue">{title}</h1>
-              {backLink && (
-                <Link 
-                  to={backLink} 
-                  className="flex items-center text-phase10-blue hover:text-phase10-darkBlue dark:text-phase10-lightBlue dark:hover:text-white transition-colors md:ml-4"
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Full-width header with its own background color */}
+      <header className="w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center">
+              {showBackButton && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="mr-2" 
+                  onClick={() => navigate(-1)}
                 >
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                  </svg>
-                  {backText || "Back"}
-                </Link>
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
               )}
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                  {title}
+                </h1>
+                {subtitle && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
             </div>
             
-            <div className="flex items-center space-x-2 w-full md:w-auto justify-end mt-2 md:mt-0">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={toggleTheme} 
-                    className="mr-2"
-                  >
-                    {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Toggle {theme === 'dark' ? 'light' : 'dark'} mode</p>
-                </TooltipContent>
-              </Tooltip>
-              
+            {/* Right content (buttons, menu, etc.) */}
+            <div className="flex items-center">
               {rightContent}
-              
-              {user && !hideSignOut && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleSignOut}
-                      className="ml-2 text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400"
-                    >
-                      <LogOut className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Sign Out</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
             </div>
           </div>
-          <div className="h-1 mt-2 bg-gradient-to-r from-phase10-blue to-phase10-lightBlue rounded-full"></div>
         </div>
       </header>
-      
-      <main className="flex-1">
-        <div className="max-w-7xl mx-auto p-4 text-gray-900 dark:text-gray-100">
-          {children}
-        </div>
+
+      {/* Main content */}
+      <main className="flex-1 container mx-auto px-4 py-6">
+        {children}
       </main>
       
+      {/* Footer */}
       <Footer />
+      
+      {/* Mobile menu */}
+      {showMobileMenu && isMobile && (
+        <MobileMenu />
+      )}
     </div>
   );
 };

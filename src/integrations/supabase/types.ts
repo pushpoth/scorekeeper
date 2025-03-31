@@ -9,7 +9,203 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      game_players: {
+        Row: {
+          game_id: string
+          id: string
+          player_id: string
+        }
+        Insert: {
+          game_id: string
+          id?: string
+          player_id: string
+        }
+        Update: {
+          game_id?: string
+          id?: string
+          player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_players_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      games: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      player_scores: {
+        Row: {
+          completed: boolean
+          created_at: string | null
+          id: string
+          phase: number
+          player_id: string
+          round_id: string
+          score: number
+          updated_at: string | null
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string | null
+          id?: string
+          phase?: number
+          player_id: string
+          round_id: string
+          score?: number
+          updated_at?: string | null
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string | null
+          id?: string
+          phase?: number
+          player_id?: string
+          round_id?: string
+          score?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_scores_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_scores_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          avatar: string | null
+          color: string | null
+          created_at: string | null
+          id: string
+          manual_total: number | null
+          name: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar?: string | null
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          manual_total?: number | null
+          name: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar?: string | null
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          manual_total?: number | null
+          name?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string
+          name: string | null
+          player_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id: string
+          name?: string | null
+          player_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          player_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rounds: {
+        Row: {
+          created_at: string | null
+          game_id: string
+          id: string
+          round_number: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          game_id: string
+          id?: string
+          round_number: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          game_id?: string
+          id?: string
+          round_number?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rounds_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
