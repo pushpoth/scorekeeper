@@ -1,22 +1,19 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useGameContext } from '@/context/GameContext';
-import { isValidCode } from '@/utils/codeGenerator';
 import { toast } from '@/hooks/use-toast';
+import { useGameContext } from '@/context/GameContext';
+import { Search } from 'lucide-react';
 
 const GameSearch: React.FC = () => {
-  const [code, setCode] = useState('');
-  const { getGameByCode } = useGameContext();
+  const [searchCode, setSearchCode] = useState('');
   const navigate = useNavigate();
-  
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!code.trim()) {
+  const { getGameByCode } = useGameContext();
+
+  const handleSearch = () => {
+    if (!searchCode.trim()) {
       toast({
         title: "Error",
         description: "Please enter a game code",
@@ -24,41 +21,48 @@ const GameSearch: React.FC = () => {
       });
       return;
     }
-    
-    if (!isValidCode(code)) {
-      toast({
-        title: "Invalid code format",
-        description: "Game codes should be three words separated by hyphens",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const game = getGameByCode(code);
+
+    const game = getGameByCode(searchCode.trim());
+
     if (game) {
       navigate(`/games/${game.id}`);
     } else {
       toast({
         title: "Game not found",
-        description: "No game found with this code",
+        description: "No game found with that code",
         variant: "destructive",
       });
     }
   };
-  
+
   return (
-    <form onSubmit={handleSearch} className="flex w-full max-w-sm items-center space-x-2 mb-4">
-      <Input
-        type="text"
-        placeholder="Find game by code (e.g. apple-banana-cherry)"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        className="flex-1"
-      />
-      <Button type="submit" variant="secondary" size="icon">
-        <Search className="h-4 w-4" />
-      </Button>
-    </form>
+    <div className="w-full mb-6">
+      <div className="flex gap-2">
+        <div className="relative flex-grow">
+          <Input
+            type="text"
+            value={searchCode}
+            onChange={(e) => setSearchCode(e.target.value)}
+            placeholder="Enter game code"
+            className="pr-10"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+          />
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
+            <Search size={18} />
+          </div>
+        </div>
+        <Button 
+          onClick={handleSearch}
+          className="bg-phase10-blue hover:bg-phase10-darkBlue text-white"
+        >
+          Find Game
+        </Button>
+      </div>
+    </div>
   );
 };
 

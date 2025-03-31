@@ -1,5 +1,6 @@
+
 import { useState } from "react";
-import { useParams, Navigate, useLocation } from "react-router-dom";
+import { useParams, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,17 +24,21 @@ import { Trash2, Plus, Copy, Check } from "lucide-react";
 import { useSelection } from "@/hooks/useSelection";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 const GameDetail = () => {
   const { id, code } = useParams<{ id?: string; code?: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { 
     games, 
     getGame, 
-    getGameByCode, 
+    getGameByCode,
+    addRound,
     deleteRound, 
-    deleteMultipleRounds, 
-    loading 
+    deleteMultipleRounds,
+    loading
   } = useGameContext();
   
   const [isAddingRound, setIsAddingRound] = useState(false);
@@ -94,7 +99,7 @@ const GameDetail = () => {
     }
   };
   
-  if (isCodeRoute && game.id) {
+  if (isCodeRoute && game.id && user) {
     return <Navigate to={`/games/${game.id}`} replace />;
   }
 
@@ -102,25 +107,25 @@ const GameDetail = () => {
     <Layout title="Game Details" showBackButton backLink="/games">
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">{formatDate(game.date)}</h2>
+          <h2 onClick={() => navigate(`/games/${game.id}`)} className="text-xl font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-phase10-blue">
+            {formatDate(game.date)}
+          </h2>
           
-          {game.uniqueCode && (
-            <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
-              <span>Code: {game.uniqueCode}</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 w-6 p-0" 
-                onClick={handleCopyGameCode}
-              >
-                {copiedCode ? (
-                  <Check size={14} className="text-green-500" />
-                ) : (
-                  <Copy size={14} />
-                )}
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+            <span>Code: {game.uniqueCode}</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0" 
+              onClick={handleCopyGameCode}
+            >
+              {copiedCode ? (
+                <Check size={14} className="text-green-500" />
+              ) : (
+                <Copy size={14} />
+              )}
+            </Button>
+          </div>
         </div>
         
         <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -135,6 +140,45 @@ const GameDetail = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Final Scores - Now ABOVE the rounds list */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Final Scores</h3>
+        <Card className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {game.players
+                .map(player => ({
+                  player,
+                  score: calculateTotalScore(game, player.id)
+                }))
+                .sort((a, b) => a.score - b.score)
+                .map((item, index) => (
+                  <div 
+                    key={item.player.id}
+                    className={`flex items-center justify-between p-2 rounded-lg ${
+                      index === 0 
+                        ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" 
+                        : "bg-gray-50 dark:bg-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {index === 0 && <Badge className="bg-green-500">Winner</Badge>}
+                      <PlayerAvatar player={item.player} size="sm" />
+                      <span className="font-medium">{item.player.name}</span>
+                    </div>
+                    <span className={`text-lg font-bold ${
+                      index === 0 ? "text-green-600 dark:text-green-400" : ""
+                    }`}>
+                      {item.score}
+                    </span>
+                  </div>
+                ))
+              }
+            </div>
+          </CardContent>
+        </Card>
       </div>
       
       <div className="space-y-4">
@@ -272,7 +316,11 @@ const GameDetail = () => {
                       {roundScores.map((score) => (
                         <div 
                           key={score.playerId}
-                          className="flex-1 min-w-[200px] bg-gray-50 dark:bg-gray-700 p-3 rounded-lg"
+                          className="flex-1 min-w-[200px] p-3 rounded-lg"
+                          style={{ 
+                            backgroundColor: score.player?.color ? `${score.player.color}20` : 'rgba(229, 231, 235, 0.5)',
+                            borderLeft: score.player?.color ? `4px solid ${score.player.color}` : '4px solid #e5e7eb'
+                          }}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -324,44 +372,6 @@ const GameDetail = () => {
             })}
           </div>
         )}
-      </div>
-      
-      <div className="mt-8 mb-16">
-        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Final Scores</h3>
-        <Card className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              {game.players
-                .map(player => ({
-                  player,
-                  score: calculateTotalScore(game, player.id)
-                }))
-                .sort((a, b) => a.score - b.score)
-                .map((item, index) => (
-                  <div 
-                    key={item.player.id}
-                    className={`flex items-center justify-between p-2 rounded-lg ${
-                      index === 0 
-                        ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" 
-                        : "bg-gray-50 dark:bg-gray-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {index === 0 && <Badge className="bg-green-500">Winner</Badge>}
-                      <PlayerAvatar player={item.player} size="sm" />
-                      <span className="font-medium">{item.player.name}</span>
-                    </div>
-                    <span className={`text-lg font-bold ${
-                      index === 0 ? "text-green-600 dark:text-green-400" : ""
-                    }`}>
-                      {item.score}
-                    </span>
-                  </div>
-                ))
-              }
-            </div>
-          </CardContent>
-        </Card>
       </div>
       
       <RoundEditor

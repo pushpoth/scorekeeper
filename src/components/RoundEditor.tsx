@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,20 +48,20 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
 
   const handleScoreChange = (playerId: string, value: string) => {
     const score = parseInt(value) || 0;
-    setScores((prev) => 
+    setScores(prev => 
       prev.map(ps => ps.playerId === playerId ? { ...ps, score } : ps)
     );
   };
 
   const handlePhaseChange = (playerId: string, phase: string) => {
     const phaseNumber = parseInt(phase) || 1;
-    setScores((prev) => 
+    setScores(prev => 
       prev.map(ps => ps.playerId === playerId ? { ...ps, phase: phaseNumber } : ps)
     );
   };
 
   const handleCompletedChange = (playerId: string, checked: boolean) => {
-    setScores((prev) => 
+    setScores(prev => 
       prev.map(ps => ps.playerId === playerId ? { ...ps, completed: checked } : ps)
     );
   };
@@ -99,7 +100,7 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
                     <Input
                       id={`score-${player.id}`}
                       type="number"
-                      value={playerScore.score || 0}
+                      value={playerScore.score}
                       onChange={(e) => handleScoreChange(player.id, e.target.value)}
                       className="mt-1"
                       min={0}
@@ -109,15 +110,15 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
                   <div>
                     <Label htmlFor={`phase-${player.id}`}>Phase</Label>
                     <Select 
-                      value={playerScore.phase?.toString() || "1"} 
+                      value={String(playerScore.phase || 1)}
                       onValueChange={(value) => handlePhaseChange(player.id, value)}
                     >
-                      <SelectTrigger className="w-full mt-1">
+                      <SelectTrigger className="w-full mt-1" id={`phase-${player.id}`}>
                         <SelectValue placeholder="Select phase" />
                       </SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: 10 }, (_, i) => i + 1).map((phase) => (
-                          <SelectItem key={phase} value={phase.toString()}>
+                          <SelectItem key={phase} value={String(phase)}>
                             Phase {phase}
                           </SelectItem>
                         ))}
@@ -129,7 +130,7 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
                 <div className="mt-2 flex items-center space-x-2">
                   <Checkbox
                     id={`completed-${player.id}`}
-                    checked={playerScore.completed || false}
+                    checked={playerScore.completed}
                     onCheckedChange={(checked) => 
                       handleCompletedChange(player.id, checked === true)
                     }

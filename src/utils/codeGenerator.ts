@@ -1,41 +1,40 @@
 
-/**
- * Utility for generating and working with unique game codes
- */
-
-// Word list for generating three-word codes
+// List of simple English words for generating readable codes
 const words = [
-  "apple", "banana", "cherry", "date", "elder", "fig", "grape", "honey", 
-  "iris", "jazz", "kiwi", "lemon", "mango", "ninja", "olive", "peach", 
-  "queen", "ruby", "spark", "tiger", "umbra", "vital", "waltz", "xenon", 
-  "yacht", "zebra", "amber", "birch", "coral", "daisy", "eagle", "fern",
-  "glow", "harbor", "indigo", "juniper", "koala", "lotus", "meadow", "noble",
-  "ocean", "pearl", "quartz", "river", "silver", "tulip", "unite", "velvet",
-  "willow", "xylophone", "zephyr", "azure", "breeze", "crimson", "dusk"
+  'apple', 'banana', 'cherry', 'date', 'elder', 'fig', 'grape', 'honey', 'ivy', 'jam', 
+  'kiwi', 'lemon', 'mango', 'nut', 'orange', 'plum', 'quail', 'rice', 'sugar', 'tea', 
+  'ugli', 'vine', 'wheat', 'yam', 'zest', 'almond', 'bean', 'corn', 'donut', 'egg', 
+  'flour', 'garlic', 'herb', 'ice', 'jelly', 'kale', 'lime', 'mint', 'noodle', 'olive', 
+  'pizza', 'quiche', 'radish', 'salad', 'tomato', 'umbrella', 'vanilla', 'waffle', 'yogurt', 
+  'zebra', 'apricot', 'berry', 'carrot', 'dragon', 'eggplant', 'fennel', 'ginger', 'hazelnut', 
+  'iris', 'jasmine', 'ketchup', 'lettuce', 'mushroom', 'nutmeg', 'onion', 'peach', 'quinoa', 
+  'raspberry', 'spinach', 'turnip', 'unicorn', 'violet', 'wasabi', 'xylophone', 'yellow', 'zucchini'
 ];
 
 /**
- * Generates a unique three-word code with hyphens
- * @returns A string with three random words separated by hyphens
+ * Generates a unique code consisting of three random words separated by hyphens
+ * @returns A unique code string (e.g., "cherry-banana-grape")
  */
 export const generateUniqueCode = (): string => {
-  // Select three random words from the array
-  const selectedWords = Array(3)
-    .fill(0)
-    .map(() => words[Math.floor(Math.random() * words.length)]);
+  // Pick three random words from the list
+  const randomWords: string[] = [];
   
-  // Join with hyphens
-  return selectedWords.join('-');
+  for (let i = 0; i < 3; i++) {
+    const randomIndex = Math.floor(Math.random() * words.length);
+    randomWords.push(words[randomIndex]);
+  }
+  
+  // Join the words with hyphens
+  return randomWords.join('-');
 };
 
 /**
- * Checks if a string is a valid three-word code format
- * @param code The string to validate
- * @returns True if the code follows the three-word-with-hyphens format
+ * Validates if a string matches the format of a generated code
+ * @param code The code string to validate
+ * @returns True if the code is in the correct format
  */
-export const isValidCode = (code: string): boolean => {
-  if (!code) return false;
-  
+export const isValidCodeFormat = (code: string): boolean => {
+  // Check if the code consists of three words separated by hyphens
   const parts = code.split('-');
-  return parts.length === 3 && parts.every(part => part.trim().length > 0);
+  return parts.length === 3 && parts.every(part => part.length > 0);
 };

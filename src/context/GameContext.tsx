@@ -1,9 +1,12 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Game, Player, Round, PlayerScore, ExportData, CsvGameData } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/hooks/use-toast";
 import { stringToColor } from "@/utils/gameUtils";
 import { parse, unparse } from "papaparse";
+import { generateUniqueCode } from "@/utils/codeGenerator";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GameContextType {
   games: Game[];
@@ -12,16 +15,20 @@ interface GameContextType {
   addPlayer: (name: string) => string;
   addRound: (gameId: string, playerScores: PlayerScore[]) => void;
   getGame: (gameId: string) => Game | undefined;
+  getGameByCode: (code: string) => Game | undefined;
   deleteGame: (gameId: string) => void;
+  deleteMultipleGames: (gameIds: string[]) => void;
   updatePlayerScore: (gameId: string, roundId: string, playerScore: PlayerScore) => void;
   updateAllPlayerScores: (gameId: string, roundId: string, playerScores: PlayerScore[]) => void;
   deleteRound: (gameId: string, roundId: string) => void;
+  deleteMultipleRounds: (gameId: string, roundIds: string[]) => void;
   updatePlayerAvatar: (playerId: string, avatar: Player["avatar"]) => void;
   updatePlayerManualScore: (playerId: string, manualTotal?: number) => void;
   exportGameData: () => void;
   exportCsvData: () => void;
   importGameData: (jsonData: string) => boolean;
   importCsvData: (csvData: string) => boolean;
+  loading: boolean;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -33,69 +40,341 @@ interface GameProviderProps {
 export const GameProvider = ({ children }: GameProviderProps) => {
   const [games, setGames] = useState<Game[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedGames = localStorage.getItem("phase10-games");
-    const savedPlayers = localStorage.getItem("phase10-players");
-    
-    if (savedGames) {
+    const loadData = async () => {
+      setLoading(true);
       try {
-        const parsedGames = JSON.parse(savedGames);
-        const gamesWithDates = parsedGames.map((game: any) => ({
-          ...game,
-          date: new Date(game.date)
-        }));
-        setGames(gamesWithDates);
+        // Try to load from Supabase first
+        const { data: session } = await supabase.auth.getSession();
+        
+        if (session?.session?.user) {
+          // User is authenticated, load from Supabase
+          await loadFromSupabase();
+        } else {
+          // No user, load from localStorage
+          loadFromLocalStorage();
+        }
       } catch (error) {
-        console.error("Failed to parse saved games", error);
-        toast({
-          title: "Error",
-          description: "Failed to load saved games",
-          variant: "destructive",
-        });
+        console.error("Failed to load data:", error);
+        // Fallback to localStorage
+        loadFromLocalStorage();
+      } finally {
+        setLoading(false);
       }
-    }
+    };
     
-    if (savedPlayers) {
-      try {
-        const parsedPlayers = JSON.parse(savedPlayers);
-        
-        const playersWithColors = parsedPlayers.map((player: Player) => {
-          if (!player.color) {
-            return {
-              ...player,
-              color: stringToColor(player.name)
-            };
-          }
-          return player;
-        });
-        
-        setPlayers(playersWithColors);
-      } catch (error) {
-        console.error("Failed to parse saved players", error);
+    loadData();
+    
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await loadFromSupabase();
+      } else if (event === 'SIGNED_OUT') {
+        loadFromLocalStorage();
       }
-    }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
+  // Sync to localStorage regardless of auth state
   useEffect(() => {
-    localStorage.setItem("phase10-games", JSON.stringify(games));
-  }, [games]);
+    if (!loading) {
+      localStorage.setItem("phase10-games", JSON.stringify(games));
+    }
+  }, [games, loading]);
 
   useEffect(() => {
-    localStorage.setItem("phase10-players", JSON.stringify(players));
-  }, [players]);
+    if (!loading) {
+      localStorage.setItem("phase10-players", JSON.stringify(players));
+    }
+  }, [players, loading]);
+
+  const loadFromLocalStorage = () => {
+    try {
+      const savedGames = localStorage.getItem("phase10-games");
+      const savedPlayers = localStorage.getItem("phase10-players");
+      
+      if (savedGames) {
+        try {
+          const parsedGames = JSON.parse(savedGames);
+          const gamesWithDates = parsedGames.map((game: any) => ({
+            ...game,
+            date: new Date(game.date)
+          }));
+          
+          setGames(gamesWithDates);
+        } catch (error) {
+          console.error("Failed to parse saved games", error);
+          toast({
+            title: "Error",
+            description: "Failed to load saved games",
+            variant: "destructive",
+          });
+        }
+      }
+      
+      if (savedPlayers) {
+        try {
+          const parsedPlayers = JSON.parse(savedPlayers);
+          
+          const playersWithColors = parsedPlayers.map((player: Player) => {
+            if (!player.color) {
+              return {
+                ...player,
+                color: stringToColor(player.name)
+              };
+            }
+            return player;
+          });
+          
+          setPlayers(playersWithColors);
+        } catch (error) {
+          console.error("Failed to parse saved players", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading data from storage:", error);
+    }
+  };
+
+  const loadFromSupabase = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      
+      console.log("Loading data from Supabase for user:", session.user.id);
+      
+      // Load players
+      const { data: playersData, error: playersError } = await supabase
+        .from('players')
+        .select('*')
+        .eq('user_id', session.user.id);
+      
+      if (playersError) throw playersError;
+      
+      if (playersData && playersData.length > 0) {
+        // Convert Supabase player format to our app's Player type
+        const formattedPlayers: Player[] = playersData.map((player: any) => ({
+          id: player.id,
+          name: player.name,
+          color: player.color || stringToColor(player.name),
+          avatar: player.avatar ? JSON.parse(player.avatar) : undefined,
+          manualTotal: player.manual_total
+        }));
+        
+        setPlayers(formattedPlayers);
+      }
+      
+      // Load games
+      const { data: gamesData, error: gamesError } = await supabase
+        .from('games')
+        .select('*')
+        .eq('user_id', session.user.id);
+      
+      if (gamesError) throw gamesError;
+      
+      if (gamesData && gamesData.length > 0) {
+        // Process each game to load its players and rounds
+        const processedGames: Game[] = [];
+        
+        for (const gameRecord of gamesData) {
+          // Load players for this game
+          const { data: gamePlayers, error: gamePlayersError } = await supabase
+            .from('game_players')
+            .select('player_id')
+            .eq('game_id', gameRecord.id);
+          
+          if (gamePlayersError) throw gamePlayersError;
+          
+          // Find player objects
+          const gamePlayerObjects = gamePlayers
+            ? gamePlayers
+                .map(gp => formattedPlayers.find(p => p.id === gp.player_id))
+                .filter(Boolean) as Player[]
+            : [];
+          
+          // Load rounds for this game
+          const { data: roundsData, error: roundsError } = await supabase
+            .from('rounds')
+            .select('*')
+            .eq('game_id', gameRecord.id)
+            .order('round_number', { ascending: true });
+          
+          if (roundsError) throw roundsError;
+          
+          const processedRounds: Round[] = [];
+          
+          // Process each round to load player scores
+          for (const round of roundsData) {
+            const { data: scoresData, error: scoresError } = await supabase
+              .from('player_scores')
+              .select('*')
+              .eq('round_id', round.id);
+            
+            if (scoresError) throw scoresError;
+            
+            // Convert Supabase score format to our app's PlayerScore type
+            const playerScores: PlayerScore[] = scoresData.map((score: any) => ({
+              id: score.id,
+              playerId: score.player_id,
+              score: score.score,
+              phase: score.phase,
+              completed: score.completed
+            }));
+            
+            processedRounds.push({
+              id: round.id,
+              playerScores
+            });
+          }
+          
+          // Create the game object
+          const game: Game = {
+            id: gameRecord.id,
+            uniqueCode: gameRecord.unique_code || generateUniqueCode(),
+            date: new Date(gameRecord.date),
+            players: gamePlayerObjects,
+            rounds: processedRounds
+          };
+          
+          processedGames.push(game);
+        }
+        
+        console.log(`Loaded ${processedGames.length} games from Supabase`);
+        setGames(processedGames);
+      }
+    } catch (error) {
+      console.error("Failed to load from Supabase:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load your games from the server",
+        variant: "destructive",
+      });
+      // Fall back to local storage
+      loadFromLocalStorage();
+    }
+  };
+
+  const syncToSupabase = async (updatedGames: Game[] = games, updatedPlayers: Player[] = players) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      
+      console.log("Syncing data to Supabase for user:", session.user.id);
+      
+      // Sync players
+      for (const player of updatedPlayers) {
+        const { error } = await supabase
+          .from('players')
+          .upsert({
+            id: player.id,
+            name: player.name,
+            color: player.color,
+            avatar: player.avatar ? JSON.stringify(player.avatar) : null,
+            manual_total: player.manualTotal,
+            user_id: session.user.id
+          }, { onConflict: 'id' });
+        
+        if (error) throw error;
+      }
+      
+      // Sync games
+      for (const game of updatedGames) {
+        // Ensure game has a unique code
+        const uniqueCode = game.uniqueCode || generateUniqueCode();
+        
+        // Upsert the game
+        const { error: gameError } = await supabase
+          .from('games')
+          .upsert({
+            id: game.id,
+            date: game.date.toISOString(),
+            user_id: session.user.id,
+            unique_code: uniqueCode
+          }, { onConflict: 'id' });
+        
+        if (gameError) throw gameError;
+        
+        // Link players to game
+        for (const player of game.players) {
+          const { error: playerLinkError } = await supabase
+            .from('game_players')
+            .upsert({
+              game_id: game.id,
+              player_id: player.id
+            }, { onConflict: 'game_id,player_id' });
+          
+          if (playerLinkError) throw playerLinkError;
+        }
+        
+        // Sync rounds
+        for (let roundIndex = 0; roundIndex < game.rounds.length; roundIndex++) {
+          const round = game.rounds[roundIndex];
+          
+          // Upsert the round
+          const { error: roundError } = await supabase
+            .from('rounds')
+            .upsert({
+              id: round.id,
+              game_id: game.id,
+              round_number: roundIndex + 1
+            }, { onConflict: 'id' });
+          
+          if (roundError) throw roundError;
+          
+          // Sync player scores
+          for (const score of round.playerScores) {
+            const scoreId = score.id || uuidv4();
+            
+            const { error: scoreError } = await supabase
+              .from('player_scores')
+              .upsert({
+                id: scoreId,
+                round_id: round.id,
+                player_id: score.playerId,
+                score: score.score,
+                phase: score.phase,
+                completed: score.completed
+              }, { onConflict: 'id' });
+            
+            if (scoreError) throw scoreError;
+          }
+        }
+      }
+      
+      console.log(`Synced ${updatedGames.length} games to Supabase`);
+    } catch (error) {
+      console.error("Failed to sync to Supabase:", error);
+      toast({
+        title: "Sync Error",
+        description: "Failed to save your data to the server",
+        variant: "destructive",
+      });
+    }
+  };
 
   const createGame = (date: Date, playerIds: string[]): string => {
     const selectedPlayers = players.filter(player => playerIds.includes(player.id));
     
     const newGame: Game = {
       id: uuidv4(),
+      uniqueCode: generateUniqueCode(),
       date,
       players: selectedPlayers,
       rounds: []
     };
     
-    setGames(prevGames => [...prevGames, newGame]);
+    const updatedGames = [...games, newGame];
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
+    
     toast({
       title: "Game created",
       description: `New game created with ${selectedPlayers.length} players`
@@ -129,7 +408,12 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       color: stringToColor(name.trim())
     };
     
-    setPlayers(prevPlayers => [...prevPlayers, newPlayer]);
+    const updatedPlayers = [...players, newPlayer];
+    setPlayers(updatedPlayers);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(games, updatedPlayers);
+    
     toast({
       title: "Player added",
       description: `${name} has been added to the player list`
@@ -150,18 +434,27 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       return;
     }
     
-    const newRound: Round = {
+    // Ensure each playerScore has an ID
+    const playerScoresWithIds = playerScores.map(ps => ({
+      ...ps,
+      id: ps.id || uuidv4()
+    }));
+    
+    const newRound = {
       id: uuidv4(),
-      playerScores
+      playerScores: playerScoresWithIds
     };
     
-    setGames(prevGames => 
-      prevGames.map(g => 
-        g.id === gameId 
-          ? { ...g, rounds: [...g.rounds, newRound] }
-          : g
-      )
-    );
+    const updatedGame = {
+      ...game,
+      rounds: [...game.rounds, newRound]
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
     
     toast({
       title: "Round added",
@@ -173,53 +466,95 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     return games.find(g => g.id === gameId);
   };
 
+  const getGameByCode = (code: string): Game | undefined => {
+    return games.find(g => g.uniqueCode === code);
+  };
+
   const deleteGame = (gameId: string) => {
-    setGames(prevGames => prevGames.filter(g => g.id !== gameId));
+    const updatedGames = games.filter(g => g.id !== gameId);
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
+    
     toast({
       title: "Game deleted",
       description: "The game has been removed"
     });
   };
 
+  const deleteMultipleGames = (gameIds: string[]) => {
+    if (gameIds.length === 0) return;
+    
+    const updatedGames = games.filter(g => !gameIds.includes(g.id));
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
+    
+    toast({
+      title: "Games deleted",
+      description: `${gameIds.length} games have been removed`
+    });
+  };
+
   const updatePlayerScore = (gameId: string, roundId: string, updatedPlayerScore: PlayerScore) => {
-    setGames(prevGames => 
-      prevGames.map(game => 
-        game.id === gameId 
-          ? {
-              ...game,
-              rounds: game.rounds.map(round => 
-                round.id === roundId 
-                  ? {
-                      ...round,
-                      playerScores: round.playerScores.map(ps => 
-                        ps.playerId === updatedPlayerScore.playerId 
-                          ? updatedPlayerScore
-                          : ps
-                      )
-                    }
-                  : round
-              )
-            }
-          : game
-      )
+    // Ensure score has an ID
+    const scoreWithId = {
+      ...updatedPlayerScore,
+      id: updatedPlayerScore.id || uuidv4()
+    };
+    
+    const updatedGames = games.map(game => 
+      game.id === gameId 
+        ? {
+            ...game,
+            rounds: game.rounds.map(round => 
+              round.id === roundId 
+                ? {
+                    ...round,
+                    playerScores: round.playerScores.map(ps => 
+                      ps.playerId === updatedPlayerScore.playerId 
+                        ? scoreWithId
+                        : ps
+                    )
+                  }
+                : round
+            )
+          }
+        : game
     );
+    
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
   };
 
   const updateAllPlayerScores = (gameId: string, roundId: string, updatedPlayerScores: PlayerScore[]) => {
-    setGames(prevGames => 
-      prevGames.map(game => 
-        game.id === gameId 
-          ? {
-              ...game,
-              rounds: game.rounds.map(round => 
-                round.id === roundId 
-                  ? { ...round, playerScores: updatedPlayerScores }
-                  : round
-              )
-            }
-          : game
-      )
+    // Ensure all scores have IDs
+    const scoresWithIds = updatedPlayerScores.map(score => ({
+      ...score,
+      id: score.id || uuidv4()
+    }));
+    
+    const updatedGames = games.map(game => 
+      game.id === gameId 
+        ? {
+            ...game,
+            rounds: game.rounds.map(round => 
+              round.id === roundId 
+                ? { ...round, playerScores: scoresWithIds }
+                : round
+            )
+          }
+        : game
     );
+    
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
     
     toast({
       title: "Round updated",
@@ -228,16 +563,19 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   };
 
   const deleteRound = (gameId: string, roundId: string) => {
-    setGames(prevGames => 
-      prevGames.map(game => 
-        game.id === gameId 
-          ? {
-              ...game,
-              rounds: game.rounds.filter(round => round.id !== roundId)
-            }
-          : game
-      )
+    const updatedGames = games.map(game => 
+      game.id === gameId 
+        ? {
+            ...game,
+            rounds: game.rounds.filter(round => round.id !== roundId)
+          }
+        : game
     );
+    
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
     
     toast({
       title: "Round deleted",
@@ -245,14 +583,40 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     });
   };
 
-  const updatePlayerAvatar = (playerId: string, avatar: Player["avatar"]) => {
-    setPlayers(prevPlayers => 
-      prevPlayers.map(player => 
-        player.id === playerId 
-          ? { ...player, avatar }
-          : player
-      )
+  const deleteMultipleRounds = (gameId: string, roundIds: string[]) => {
+    if (roundIds.length === 0) return;
+    
+    const updatedGames = games.map(game => 
+      game.id === gameId 
+        ? {
+            ...game,
+            rounds: game.rounds.filter(round => !roundIds.includes(round.id))
+          }
+        : game
     );
+    
+    setGames(updatedGames);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(updatedGames);
+    
+    toast({
+      title: "Rounds deleted",
+      description: `${roundIds.length} rounds have been removed from the game`
+    });
+  };
+
+  const updatePlayerAvatar = (playerId: string, avatar: Player["avatar"]) => {
+    const updatedPlayers = players.map(player => 
+      player.id === playerId 
+        ? { ...player, avatar }
+        : player
+    );
+    
+    setPlayers(updatedPlayers);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(games, updatedPlayers);
     
     toast({
       title: "Avatar updated",
@@ -261,13 +625,16 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   };
 
   const updatePlayerManualScore = (playerId: string, manualTotal?: number) => {
-    setPlayers(prevPlayers => 
-      prevPlayers.map(player => 
-        player.id === playerId 
-          ? { ...player, manualTotal }
-          : player
-      )
+    const updatedPlayers = players.map(player => 
+      player.id === playerId 
+        ? { ...player, manualTotal }
+        : player
     );
+    
+    setPlayers(updatedPlayers);
+    
+    // Sync to Supabase if user is authenticated
+    syncToSupabase(games, updatedPlayers);
     
     toast({
       title: "Score updated",
@@ -289,7 +656,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       const dataStr = JSON.stringify(exportData, null, 2);
       const dataUri = `data:application/json;charset=utf-8,${encodeURIComponent(dataStr)}`;
       
-      const exportFileDefaultName = `phase10_data_${new Date().toISOString().slice(0, 10)}.json`;
+      const exportFileDefaultName = `scorekeeper_data_${new Date().toISOString().slice(0, 10)}.json`;
       
       const linkElement = document.createElement("a");
       linkElement.setAttribute("href", dataUri);
@@ -337,7 +704,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       const csv = unparse(csvRows);
       const dataUri = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
       
-      const exportFileDefaultName = `phase10_data_${new Date().toISOString().slice(0, 10)}.csv`;
+      const exportFileDefaultName = `scorekeeper_data_${new Date().toISOString().slice(0, 10)}.csv`;
       
       const linkElement = document.createElement("a");
       linkElement.setAttribute("href", dataUri);
@@ -424,6 +791,9 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       
       setGames(validGames);
       setPlayers(playersWithColors);
+      
+      // Sync to Supabase if user is authenticated
+      syncToSupabase(validGames, playersWithColors);
       
       toast({
         title: "Import successful",
@@ -530,6 +900,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
 
         const game: Game = {
           id: uuidv4(),
+          uniqueCode: generateUniqueCode(),
           date: new Date(dateStr),
           players: gamePlayers,
           rounds
@@ -538,7 +909,11 @@ export const GameProvider = ({ children }: GameProviderProps) => {
         newGames.push(game);
       });
 
-      setGames(prev => [...prev, ...newGames]);
+      const updatedGames = [...games, ...newGames];
+      setGames(updatedGames);
+      
+      // Sync to Supabase if user is authenticated
+      syncToSupabase(updatedGames);
       
       toast({
         title: "CSV import successful",
@@ -560,14 +935,18 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   const value = {
     games,
     players,
+    loading,
     createGame,
     addPlayer,
     addRound,
     getGame,
+    getGameByCode,
     deleteGame,
+    deleteMultipleGames,
     updatePlayerScore,
     updateAllPlayerScores,
     deleteRound,
+    deleteMultipleRounds,
     updatePlayerAvatar,
     updatePlayerManualScore,
     exportGameData,
