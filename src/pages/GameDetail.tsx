@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useParams, Navigate, useLocation } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
@@ -42,7 +41,6 @@ const GameDetail = () => {
   const [copiedCode, setCopiedCode] = useState(false);
   const roundSelection = useSelection();
   
-  // Find the game by id or code
   let game;
   if (code) {
     game = getGameByCode(code);
@@ -52,12 +50,10 @@ const GameDetail = () => {
   
   const isCodeRoute = location.pathname.includes('/code/');
 
-  // Redirect to 404 if game not found
   if (!loading && !game) {
     return <Navigate to="/404" />;
   }
 
-  // Show loading state while game is loading
   if (loading || !game) {
     return (
       <Layout title="Loading Game..." showBackButton backLink="/games">
@@ -98,7 +94,6 @@ const GameDetail = () => {
     }
   };
   
-  // If we came via the code route but have a game ID, redirect to the ID route
   if (isCodeRoute && game.id) {
     return <Navigate to={`/games/${game.id}`} replace />;
   }
@@ -142,7 +137,6 @@ const GameDetail = () => {
         </div>
       </div>
       
-      {/* Rounds */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Rounds</h3>
@@ -187,7 +181,6 @@ const GameDetail = () => {
           </div>
         </div>
         
-        {/* Select All Controls */}
         {game.rounds.length > 0 && (
           <div className="flex items-center gap-2 mb-2">
             <Checkbox 
@@ -218,7 +211,6 @@ const GameDetail = () => {
         ) : (
           <div className="space-y-4">
             {game.rounds.map((round, index) => {
-              // Calculate per-round totals
               const roundScores = round.playerScores.map(ps => {
                 const player = game.players.find(p => p.id === ps.playerId);
                 return {
@@ -309,7 +301,6 @@ const GameDetail = () => {
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                       <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                         {game.players.map(player => {
-                          // Calculate running total for this player up to this round
                           const runningTotal = game.rounds
                             .slice(0, index + 1)
                             .reduce((sum, r) => {
@@ -335,7 +326,6 @@ const GameDetail = () => {
         )}
       </div>
       
-      {/* Final Scores */}
       <div className="mt-8 mb-16">
         <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">Final Scores</h3>
         <Card className="overflow-hidden dark:bg-gray-800 dark:border-gray-700">
@@ -374,12 +364,16 @@ const GameDetail = () => {
         </Card>
       </div>
       
-      {/* Round Editor Dialog */}
       <RoundEditor
         gameId={game.id}
         players={game.players}
         open={isAddingRound}
         onOpenChange={setIsAddingRound}
+        onSave={(gameId, roundId, playerScores) => {
+          addRound(gameId, playerScores);
+          setIsAddingRound(false);
+        }}
+        onCancel={() => setIsAddingRound(false)}
       />
     </Layout>
   );

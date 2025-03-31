@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,24 +7,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlayerScore, Player } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import PlayerAvatar from "./PlayerAvatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface RoundEditorProps {
-  roundId: string;
+  roundId?: string;
   gameId: string;
-  playerScores: PlayerScore[];
+  playerScores?: PlayerScore[];
   players: Player[];
   onSave: (gameId: string, roundId: string, updatedScores: PlayerScore[]) => void;
   onCancel: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const RoundEditor: React.FC<RoundEditorProps> = ({ 
-  roundId, gameId, playerScores, players, onSave, onCancel 
+  roundId, gameId, playerScores = [], players, onSave, onCancel, open, onOpenChange
 }) => {
   const [scores, setScores] = useState<PlayerScore[]>([]);
 
   useEffect(() => {
-    setScores([...playerScores]);
-  }, [playerScores]);
+    if (Array.isArray(playerScores) && playerScores.length > 0) {
+      setScores([...playerScores]);
+    } else {
+      const defaultScores = players.map(player => ({
+        id: undefined,
+        playerId: player.id,
+        score: 0,
+        phase: 1,
+        completed: false
+      }));
+      setScores(defaultScores);
+    }
+  }, [playerScores, players]);
 
   const handleScoreChange = (playerId: string, value: string) => {
     const score = parseInt(value) || 0;
@@ -48,18 +66,25 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
   };
 
   const handleSave = () => {
-    onSave(gameId, roundId, scores);
+    const finalRoundId = roundId || `round-${Date.now()}`;
+    onSave(gameId, finalRoundId, scores);
   };
 
-  return (
+  const content = (
     <div className="space-y-4">
-      <h3 className="text-lg font-medium text-center mb-4">Edit Round</h3>
+      <h3 className="text-lg font-medium text-center mb-4">
+        {roundId ? "Edit Round" : "Add Round"}
+      </h3>
       
       <ScrollArea className="h-[320px] pr-4">
         <div className="space-y-6">
           {players.map((player) => {
-            const playerScore = scores.find(ps => ps.playerId === player.id);
-            if (!playerScore) return null;
+            const playerScore = scores.find(ps => ps.playerId === player.id) || {
+              playerId: player.id,
+              score: 0,
+              phase: 1,
+              completed: false
+            };
             
             return (
               <div key={player.id} className="pb-4 border-b last:border-0">
@@ -84,7 +109,7 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
                   <div>
                     <Label htmlFor={`phase-${player.id}`}>Phase</Label>
                     <Select 
-                      value={playerScore.phase.toString()} 
+                      value={playerScore.phase?.toString() || "1"} 
                       onValueChange={(value) => handlePhaseChange(player.id, value)}
                     >
                       <SelectTrigger className="w-full mt-1">
@@ -128,6 +153,21 @@ const RoundEditor: React.FC<RoundEditorProps> = ({
       </div>
     </div>
   );
+
+  if (typeof open !== 'undefined' && onOpenChange) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{roundId ? "Edit Round" : "Add New Round"}</DialogTitle>
+          </DialogHeader>
+          {content}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return content;
 };
 
 export default RoundEditor;
