@@ -1,4 +1,3 @@
-
 /**
  * Game Context
  * 
@@ -18,7 +17,15 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/hooks/use-toast";
 import { stringToColor } from "@/utils/gameUtils";
-import { Game, Player, PlayerScore } from "@/types";
+import { 
+  Game, 
+  Player, 
+  PlayerScore,
+  DbPlayer,
+  DbGame,
+  DbRound,
+  DbPlayerScore
+} from "@/types";
 import { gameReducer, GameState, GameAction } from "./gameReducer";
 import { 
   processJsonImport, 
@@ -189,15 +196,44 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       console.log("Loading data from Supabase for user:", user.id);
       
       // Load players
-      const { data: playersData, error: playersError } = await supabase
+      const { data: dbPlayers, error: playersError } = await supabase
         .from('players')
         .select('*')
         .eq('user_id', user.id);
       
       if (playersError) throw playersError;
       
+      // Transform database player objects to our application Player type
+      const appPlayers: Player[] = [];
+      
+      if (dbPlayers && dbPlayers.length > 0) {
+        for (const dbPlayer of dbPlayers) {
+          const player: Player = {
+            id: dbPlayer.id,
+            name: dbPlayer.name,
+            color: dbPlayer.color || stringToColor(dbPlayer.name)
+          };
+          
+          // Parse avatar if it exists
+          if (dbPlayer.avatar) {
+            try {
+              player.avatar = JSON.parse(dbPlayer.avatar);
+            } catch (e) {
+              console.warn("Failed to parse player avatar", e);
+            }
+          }
+          
+          // Add manual total if it exists
+          if (dbPlayer.manual_total !== null) {
+            player.manualTotal = dbPlayer.manual_total;
+          }
+          
+          appPlayers.push(player);
+        }
+      }
+      
       // Load games
-      const { data: gamesData, error: gamesError } = await supabase
+      const { data: dbGames, error: gamesError } = await supabase
         .from('games')
         .select('*')
         .eq('user_id', user.id);
@@ -205,82 +241,81 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       if (gamesError) throw gamesError;
       
       // Process games data
-      if (gamesData && gamesData.length > 0) {
-        const processedGames = await Promise.all(gamesData.map(async (gameRecord) => {
+      const appGames: Game[] = [];
+      
+      if (dbGames && dbGames.length > 0) {
+        for (const dbGame of dbGames) {
           // Load players for this game
           const { data: gamePlayers, error: gamePlayersError } = await supabase
             .from('game_players')
             .select('player_id')
-            .eq('game_id', gameRecord.id);
+            .eq('game_id', dbGame.id);
           
           if (gamePlayersError) throw gamePlayersError;
           
+          // Find player objects for this game
+          const gamePlayerObjects = gamePlayers 
+            ? gamePlayers
+                .map(gp => appPlayers.find(p => p.id === gp.player_id))
+                .filter(Boolean) as Player[]
+            : [];
+          
           // Load rounds for this game
-          const { data: rounds, error: roundsError } = await supabase
+          const { data: dbRounds, error: roundsError } = await supabase
             .from('rounds')
             .select('*')
-            .eq('game_id', gameRecord.id)
+            .eq('game_id', dbGame.id)
             .order('round_number', { ascending: true });
           
           if (roundsError) throw roundsError;
           
           // Process rounds with player scores
-          const processedRounds = await Promise.all(rounds.map(async (round) => {
-            const { data: scores, error: scoresError } = await supabase
+          const appRounds = await Promise.all((dbRounds || []).map(async (dbRound) => {
+            const { data: dbScores, error: scoresError } = await supabase
               .from('player_scores')
               .select('*')
-              .eq('round_id', round.id);
+              .eq('round_id', dbRound.id);
             
             if (scoresError) throw scoresError;
             
+            // Convert DB scores to app scores
+            const playerScores: PlayerScore[] = (dbScores || []).map(dbScore => ({
+              id: dbScore.id,
+              playerId: dbScore.player_id,
+              score: dbScore.score,
+              phase: dbScore.phase,
+              completed: dbScore.completed
+            }));
+            
             return {
-              id: round.id,
-              playerScores: scores
+              id: dbRound.id,
+              playerScores: playerScores
             };
           }));
           
-          // Find players from our player list
-          const gamePlayerObjects = gamePlayers 
-            ? gamePlayers
-                .map(gp => playersData?.find(p => p.id === gp.player_id))
-                .filter(Boolean) as Player[]
-            : [];
-          
           // Create game object
-          return {
-            id: gameRecord.id,
-            uniqueCode: gameRecord.unique_code || generateUniqueCode(),
-            date: new Date(gameRecord.date),
+          const game: Game = {
+            id: dbGame.id,
+            uniqueCode: dbGame.unique_code || generateUniqueCode(),
+            date: new Date(dbGame.date),
             players: gamePlayerObjects,
-            rounds: processedRounds
-          } as Game;
-        }));
-        
-        // Set games and players in state
-        if (processedGames.length > 0) {
-          dispatch({ type: 'SET_GAMES', payload: processedGames });
-        }
-        
-        if (playersData && playersData.length > 0) {
-          const playersWithColors = playersData.map(player => ({
-            ...player,
-            color: player.color || stringToColor(player.name)
-          }));
+            rounds: appRounds
+          };
           
-          dispatch({ type: 'SET_PLAYERS', payload: playersWithColors });
-        }
-        
-        console.log(`Loaded ${processedGames.length} games and ${playersData?.length || 0} players from Supabase`);
-      } else {
-        console.log("No games found in Supabase, using local data");
-        // If no data in Supabase but we have local data, use that
-        const localGames = localStorage.getItem("phase10-games");
-        const localPlayers = localStorage.getItem("phase10-players");
-        
-        if (localGames && localPlayers) {
-          loadDataFromStorage();
+          appGames.push(game);
         }
       }
+      
+      // Set games and players in state
+      if (appGames.length > 0) {
+        dispatch({ type: 'SET_GAMES', payload: appGames });
+      }
+      
+      if (appPlayers.length > 0) {
+        dispatch({ type: 'SET_PLAYERS', payload: appPlayers });
+      }
+      
+      console.log(`Loaded ${appGames.length} games and ${appPlayers.length} players from Supabase`);
     } catch (error) {
       console.error("Error loading data from Supabase:", error);
       // Fall back to local storage if Supabase fails
@@ -300,16 +335,18 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       
       // Save all players first
       for (const player of state.players) {
+        const dbPlayer = {
+          id: player.id,
+          name: player.name,
+          color: player.color,
+          avatar: player.avatar ? JSON.stringify(player.avatar) : null,
+          manual_total: player.manualTotal,
+          user_id: user.id
+        };
+        
         const { error } = await supabase
           .from('players')
-          .upsert({
-            id: player.id,
-            name: player.name,
-            color: player.color,
-            avatar: player.avatar ? JSON.stringify(player.avatar) : null,
-            manual_total: player.manualTotal,
-            user_id: user.id
-          }, {
+          .upsert(dbPlayer, {
             onConflict: 'id'
           });
           
@@ -322,14 +359,16 @@ export const GameProvider = ({ children }: GameProviderProps) => {
         const uniqueCode = game.uniqueCode || generateUniqueCode();
         
         // Upsert the game
+        const dbGame = {
+          id: game.id,
+          date: game.date.toISOString(),
+          user_id: user.id,
+          unique_code: uniqueCode
+        };
+        
         const { error: gameError } = await supabase
           .from('games')
-          .upsert({
-            id: game.id,
-            date: game.date.toISOString(),
-            user_id: user.id,
-            unique_code: uniqueCode
-          }, {
+          .upsert(dbGame, {
             onConflict: 'id'
           });
         
@@ -376,16 +415,18 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           
           // Save player scores
           for (const score of round.playerScores) {
+            const dbScore = {
+              id: score.id || uuidv4(),
+              round_id: round.id,
+              player_id: score.playerId,
+              score: score.score,
+              phase: score.phase,
+              completed: score.completed
+            };
+            
             const { error: scoreError } = await supabase
               .from('player_scores')
-              .upsert({
-                id: score.id || uuidv4(), // Generate ID if doesn't exist
-                round_id: round.id,
-                player_id: score.playerId,
-                score: score.score,
-                phase: score.phase,
-                completed: score.completed
-              }, {
+              .upsert(dbScore, {
                 onConflict: 'id'
               });
             

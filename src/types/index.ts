@@ -59,3 +59,43 @@ export interface Selection {
   someSelected: () => boolean;
   allSelected: (totalItems: number) => boolean;
 }
+
+// Database interfaces for Supabase data mapping
+export interface DbPlayer {
+  id: string;
+  name: string;
+  color?: string;
+  avatar?: string;
+  manual_total?: number;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DbGame {
+  id: string;
+  date: string;
+  unique_code?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DbRound {
+  id: string;
+  game_id: string;
+  round_number: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DbPlayerScore {
+  id: string;
+  player_id: string;
+  round_id: string;
+  score: number;
+  phase: number;
+  completed: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
