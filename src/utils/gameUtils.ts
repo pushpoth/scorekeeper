@@ -75,6 +75,7 @@ export const getPlayerRankings = (games: Game[], players: Player[]): {
   total: number;
   rank: number;
   color?: string;
+  money?: number;
 }[] => {
   if (!games.length || !players.length) return [];
   
@@ -89,7 +90,8 @@ export const getPlayerRankings = (games: Game[], players: Player[]): {
       playerId: player.id, 
       name: player.name, 
       total,
-      color: player.color
+      color: player.color,
+      money: player.money || 0
     };
   });
   
@@ -118,4 +120,41 @@ export const stringToColor = (str: string): string => {
   const l = 45 + Math.abs(hash % 10); // Lightness (45-55%)
   
   return `hsl(${h}, ${s}%, ${l}%)`;
+};
+
+// Game-related emojis for player avatars
+const gameEmojis = [
+  "🃏", "🎲", "🎯", "🎪", "🎭", "🎮", "🎰", 
+  "🎪", "🎨", "🎬", "🎸", "🎹", "🎺", "🎻",
+  "🥇", "🥈", "🥉", "🏆", "🏅", "🎖️", "🎗️",
+  "🎟️", "🎫", "🎩", "🎪", "🎭", "🎨", "🎰",
+  "♠️", "♥️", "♦️", "♣️", "🀄", "🎴", "🎱"
+];
+
+export const getRandomEmoji = (): string => {
+  return gameEmojis[Math.floor(Math.random() * gameEmojis.length)];
+};
+
+// Get the total money for a player across all games
+export const getPlayerTotalMoney = (playerId: string, players: Player[]): number => {
+  const player = players.find(p => p.id === playerId);
+  return player?.money || 0;
+};
+
+// Get winner information for a round
+export const getRoundWinnerInfo = (round: Round, players: Player[]): {
+  winnerName: string;
+  potAmount: number;
+  winningHand?: string;
+} | null => {
+  if (!round.winnerId) return null;
+  
+  const winner = players.find(p => p.id === round.winnerId);
+  if (!winner) return null;
+  
+  return {
+    winnerName: winner.name,
+    potAmount: round.potAmount || 0,
+    winningHand: round.winningHand
+  };
 };

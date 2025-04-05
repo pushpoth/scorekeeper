@@ -46,6 +46,7 @@ export type Database = {
         Row: {
           created_at: string | null
           date: string
+          game_type: string | null
           id: string
           unique_code: string | null
           updated_at: string | null
@@ -54,6 +55,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           date?: string
+          game_type?: string | null
           id?: string
           unique_code?: string | null
           updated_at?: string | null
@@ -62,6 +64,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           date?: string
+          game_type?: string | null
           id?: string
           unique_code?: string | null
           updated_at?: string | null
@@ -74,6 +77,7 @@ export type Database = {
           completed: boolean
           created_at: string | null
           id: string
+          is_winner: boolean | null
           phase: number
           player_id: string
           round_id: string
@@ -84,6 +88,7 @@ export type Database = {
           completed?: boolean
           created_at?: string | null
           id?: string
+          is_winner?: boolean | null
           phase?: number
           player_id: string
           round_id: string
@@ -94,6 +99,7 @@ export type Database = {
           completed?: boolean
           created_at?: string | null
           id?: string
+          is_winner?: boolean | null
           phase?: number
           player_id?: string
           round_id?: string
@@ -124,6 +130,7 @@ export type Database = {
           created_at: string | null
           id: string
           manual_total: number | null
+          money: number | null
           name: string
           updated_at: string | null
           user_id: string | null
@@ -134,6 +141,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           manual_total?: number | null
+          money?: number | null
           name: string
           updated_at?: string | null
           user_id?: string | null
@@ -144,6 +152,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           manual_total?: number | null
+          money?: number | null
           name?: string
           updated_at?: string | null
           user_id?: string | null
@@ -182,22 +191,31 @@ export type Database = {
           created_at: string | null
           game_id: string
           id: string
+          pot_amount: number | null
           round_number: number
           updated_at: string | null
+          winner_id: string | null
+          winning_hand: string | null
         }
         Insert: {
           created_at?: string | null
           game_id: string
           id?: string
+          pot_amount?: number | null
           round_number: number
           updated_at?: string | null
+          winner_id?: string | null
+          winning_hand?: string | null
         }
         Update: {
           created_at?: string | null
           game_id?: string
           id?: string
+          pot_amount?: number | null
           round_number?: number
           updated_at?: string | null
+          winner_id?: string | null
+          winning_hand?: string | null
         }
         Relationships: [
           {
@@ -205,6 +223,13 @@ export type Database = {
             columns: ["game_id"]
             isOneToOne: false
             referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rounds_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]

@@ -1,3 +1,4 @@
+
 /**
  * Game Context
  * 
@@ -16,15 +17,17 @@ import {
 } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "@/hooks/use-toast";
-import { stringToColor } from "@/utils/gameUtils";
+import { stringToColor, getRandomEmoji } from "@/utils/gameUtils";
 import { 
   Game, 
   Player, 
   PlayerScore,
+  Round,
   DbPlayer,
   DbGame,
   DbRound,
-  DbPlayerScore
+  DbPlayerScore,
+  GameType
 } from "@/types";
 import { gameReducer, GameState, GameAction } from "./gameReducer";
 import { 
@@ -41,9 +44,14 @@ import { supabase } from "@/integrations/supabase/client";
 export interface GameContextType {
   games: Game[];
   players: Player[];
-  createGame: (date: Date, playerIds: string[]) => string;
-  addPlayer: (name: string) => string;
-  addRound: (gameId: string, playerScores: PlayerScore[]) => void;
+  createGame: (date: Date, playerIds: string[], gameType: GameType) => string;
+  addPlayer: (name: string, initialMoney?: number) => string;
+  addRound: (gameId: string, roundData: {
+    playerScores: PlayerScore[];
+    potAmount?: number;
+    winnerId?: string;
+    winningHand?: string;
+  }) => void;
   getGame: (gameId: string) => Game | undefined;
   getGameByCode: (code: string) => Game | undefined;
   deleteGame: (gameId: string) => void;
@@ -54,6 +62,7 @@ export interface GameContextType {
   deleteMultipleRounds: (gameId: string, roundIds: string[]) => void;
   updatePlayerAvatar: (playerId: string, avatar: Player["avatar"]) => void;
   updatePlayerManualScore: (playerId: string, manualTotal?: number) => void;
+  updatePlayerMoney: (playerId: string, money?: number) => void;
   exportGameData: () => void;
   exportCsvData: () => void;
   importGameData: (jsonData: string) => boolean;
@@ -148,7 +157,8 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           const parsedGames = JSON.parse(savedGames);
           const gamesWithDates = parsedGames.map((game: any) => ({
             ...game,
-            date: new Date(game.date)
+            date: new Date(game.date),
+            gameType: game.gameType || "Phase 10" // Default to Phase 10 for older games
           }));
           
           dispatch({ type: 'SET_GAMES', payload: gamesWithDates });
@@ -166,17 +176,40 @@ export const GameProvider = ({ children }: GameProviderProps) => {
         try {
           const parsedPlayers = JSON.parse(savedPlayers);
           
-          const playersWithColors = parsedPlayers.map((player: Player) => {
-            if (!player.color) {
-              return {
-                ...player,
+          const playersWithDefaults = parsedPlayers.map((player: Player) => {
+            let updatedPlayer = player;
+            
+            // Add color if missing
+            if (!updatedPlayer.color) {
+              updatedPlayer = {
+                ...updatedPlayer,
                 color: stringToColor(player.name)
               };
             }
-            return player;
+            
+            // Initialize money if missing
+            if (updatedPlayer.money === undefined) {
+              updatedPlayer = {
+                ...updatedPlayer,
+                money: 0
+              };
+            }
+            
+            // Add default avatar if missing
+            if (!updatedPlayer.avatar) {
+              updatedPlayer = {
+                ...updatedPlayer,
+                avatar: {
+                  type: "emoji",
+                  value: getRandomEmoji()
+                }
+              };
+            }
+            
+            return updatedPlayer;
           });
           
-          dispatch({ type: 'SET_PLAYERS', payload: playersWithColors });
+          dispatch({ type: 'SET_PLAYERS', payload: playersWithDefaults });
         } catch (error) {
           console.error("Failed to parse saved players", error);
         }
@@ -211,7 +244,8 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           const player: Player = {
             id: dbPlayer.id,
             name: dbPlayer.name,
-            color: dbPlayer.color || stringToColor(dbPlayer.name)
+            color: dbPlayer.color || stringToColor(dbPlayer.name),
+            money: dbPlayer.money || 0
           };
           
           // Parse avatar if it exists
@@ -220,7 +254,18 @@ export const GameProvider = ({ children }: GameProviderProps) => {
               player.avatar = JSON.parse(dbPlayer.avatar);
             } catch (e) {
               console.warn("Failed to parse player avatar", e);
+              // Set default avatar
+              player.avatar = {
+                type: "emoji",
+                value: getRandomEmoji()
+              };
             }
+          } else {
+            // Set default avatar
+            player.avatar = {
+              type: "emoji",
+              value: getRandomEmoji()
+            };
           }
           
           // Add manual total if it exists
@@ -284,12 +329,16 @@ export const GameProvider = ({ children }: GameProviderProps) => {
               playerId: dbScore.player_id,
               score: dbScore.score,
               phase: dbScore.phase,
-              completed: dbScore.completed
+              completed: dbScore.completed,
+              isWinner: dbScore.is_winner || false
             }));
             
             return {
               id: dbRound.id,
-              playerScores: playerScores
+              playerScores: playerScores,
+              potAmount: dbRound.pot_amount,
+              winnerId: dbRound.winner_id,
+              winningHand: dbRound.winning_hand
             };
           }));
           
@@ -299,7 +348,8 @@ export const GameProvider = ({ children }: GameProviderProps) => {
             uniqueCode: dbGame.unique_code || generateUniqueCode(),
             date: new Date(dbGame.date),
             players: gamePlayerObjects,
-            rounds: appRounds
+            rounds: appRounds,
+            gameType: dbGame.game_type || "Phase 10" // Default to Phase 10 for older games
           };
           
           appGames.push(game);
@@ -341,6 +391,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           color: player.color,
           avatar: player.avatar ? JSON.stringify(player.avatar) : null,
           manual_total: player.manualTotal,
+          money: player.money || 0,
           user_id: user.id
         };
         
@@ -363,7 +414,8 @@ export const GameProvider = ({ children }: GameProviderProps) => {
           id: game.id,
           date: game.date.toISOString(),
           user_id: user.id,
-          unique_code: uniqueCode
+          unique_code: uniqueCode,
+          game_type: game.gameType || "Phase 10"
         };
         
         const { error: gameError } = await supabase
@@ -406,7 +458,10 @@ export const GameProvider = ({ children }: GameProviderProps) => {
             .upsert({
               id: round.id,
               game_id: game.id,
-              round_number: roundIndex + 1
+              round_number: roundIndex + 1,
+              pot_amount: round.potAmount || 0,
+              winner_id: round.winnerId,
+              winning_hand: round.winningHand
             }, {
               onConflict: 'id'
             });
@@ -421,7 +476,8 @@ export const GameProvider = ({ children }: GameProviderProps) => {
               player_id: score.playerId,
               score: score.score,
               phase: score.phase,
-              completed: score.completed
+              completed: score.completed,
+              is_winner: score.isWinner || false
             };
             
             const { error: scoreError } = await supabase
@@ -450,7 +506,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   /**
    * Creates a new game with the given date and players
    */
-  const createGame = useCallback((date: Date, playerIds: string[]): string => {
+  const createGame = useCallback((date: Date, playerIds: string[], gameType: GameType = "Phase 10"): string => {
     const selectedPlayers = state.players.filter(player => playerIds.includes(player.id));
     
     const newGame: Game = {
@@ -458,14 +514,15 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       uniqueCode: generateUniqueCode(),
       date,
       players: selectedPlayers,
-      rounds: []
+      rounds: [],
+      gameType
     };
     
     dispatch({ type: 'CREATE_GAME', payload: newGame });
     
     toast({
       title: "Game created",
-      description: `New game created with ${selectedPlayers.length} players`
+      description: `New ${gameType} game created with ${selectedPlayers.length} players`
     });
     
     return newGame.id;
@@ -474,7 +531,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   /**
    * Adds a new player with the given name
    */
-  const addPlayer = useCallback((name: string): string => {
+  const addPlayer = useCallback((name: string, initialMoney: number = 0): string => {
     if (!name.trim()) {
       toast({
         title: "Error",
@@ -496,7 +553,12 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     const newPlayer: Player = {
       id: uuidv4(),
       name: name.trim(),
-      color: stringToColor(name.trim())
+      color: stringToColor(name.trim()),
+      money: initialMoney,
+      avatar: {
+        type: "emoji",
+        value: getRandomEmoji()
+      }
     };
     
     dispatch({ type: 'ADD_PLAYER', payload: newPlayer });
@@ -512,7 +574,12 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   /**
    * Adds a new round to the given game
    */
-  const addRound = useCallback((gameId: string, playerScores: PlayerScore[]) => {
+  const addRound = useCallback((gameId: string, roundData: {
+    playerScores: PlayerScore[];
+    potAmount?: number;
+    winnerId?: string;
+    winningHand?: string;
+  }) => {
     const game = state.games.find(g => g.id === gameId);
     
     if (!game) {
@@ -525,14 +592,35 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     }
     
     // Ensure each playerScore has an ID
-    const playerScoresWithIds = playerScores.map(ps => ({
+    const playerScoresWithIds = roundData.playerScores.map(ps => ({
       ...ps,
       id: ps.id || uuidv4()
     }));
     
-    const newRound = {
+    // Update player money if a pot amount and winner are specified
+    if (roundData.potAmount && roundData.potAmount > 0 && roundData.winnerId) {
+      const winningPlayer = state.players.find(p => p.id === roundData.winnerId);
+      
+      if (winningPlayer) {
+        const currentMoney = winningPlayer.money || 0;
+        const newMoney = currentMoney + roundData.potAmount;
+        
+        dispatch({ 
+          type: 'UPDATE_PLAYER_MONEY', 
+          payload: { 
+            playerId: winningPlayer.id, 
+            money: newMoney 
+          } 
+        });
+      }
+    }
+    
+    const newRound: Round = {
       id: uuidv4(),
-      playerScores: playerScoresWithIds
+      playerScores: playerScoresWithIds,
+      potAmount: roundData.potAmount,
+      winnerId: roundData.winnerId,
+      winningHand: roundData.winningHand
     };
     
     dispatch({ 
@@ -544,7 +632,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       title: "Round added",
       description: `Round ${game.rounds.length + 1} has been added`
     });
-  }, [state.games]);
+  }, [state.games, state.players]);
 
   /**
    * Gets a game by its ID
@@ -563,20 +651,94 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   /**
    * Deletes a game
    */
-  const deleteGame = useCallback((gameId: string) => {
+  const deleteGame = useCallback(async (gameId: string) => {
+    if (user) {
+      try {
+        // First delete all player scores for this game's rounds
+        const game = state.games.find(g => g.id === gameId);
+        if (game) {
+          for (const round of game.rounds) {
+            // Delete player scores for this round
+            await supabase
+              .from('player_scores')
+              .delete()
+              .eq('round_id', round.id);
+          }
+        }
+        
+        // Delete rounds
+        await supabase
+          .from('rounds')
+          .delete()
+          .eq('game_id', gameId);
+        
+        // Delete game_players
+        await supabase
+          .from('game_players')
+          .delete()
+          .eq('game_id', gameId);
+        
+        // Delete game
+        await supabase
+          .from('games')
+          .delete()
+          .eq('id', gameId);
+      } catch (error) {
+        console.error("Error deleting game from Supabase:", error);
+      }
+    }
+    
     dispatch({ type: 'DELETE_GAME', payload: gameId });
     
     toast({
       title: "Game deleted",
       description: "The game has been removed"
     });
-  }, []);
+  }, [user, state.games]);
 
   /**
    * Deletes multiple games at once
    */
-  const deleteMultipleGames = useCallback((gameIds: string[]) => {
+  const deleteMultipleGames = useCallback(async (gameIds: string[]) => {
     if (gameIds.length === 0) return;
+    
+    if (user) {
+      try {
+        for (const gameId of gameIds) {
+          // First delete all player scores for this game's rounds
+          const game = state.games.find(g => g.id === gameId);
+          if (game) {
+            for (const round of game.rounds) {
+              // Delete player scores for this round
+              await supabase
+                .from('player_scores')
+                .delete()
+                .eq('round_id', round.id);
+            }
+          }
+          
+          // Delete rounds
+          await supabase
+            .from('rounds')
+            .delete()
+            .eq('game_id', gameId);
+          
+          // Delete game_players
+          await supabase
+            .from('game_players')
+            .delete()
+            .eq('game_id', gameId);
+        }
+        
+        // Delete games
+        await supabase
+          .from('games')
+          .delete()
+          .in('id', gameIds);
+      } catch (error) {
+        console.error("Error deleting games from Supabase:", error);
+      }
+    }
     
     dispatch({ type: 'DELETE_MULTIPLE_GAMES', payload: gameIds });
     
@@ -584,7 +746,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       title: "Games deleted",
       description: `${gameIds.length} games have been removed`
     });
-  }, []);
+  }, [user, state.games]);
 
   /**
    * Updates a player score in a round
@@ -634,7 +796,25 @@ export const GameProvider = ({ children }: GameProviderProps) => {
   /**
    * Deletes a round from a game
    */
-  const deleteRound = useCallback((gameId: string, roundId: string) => {
+  const deleteRound = useCallback(async (gameId: string, roundId: string) => {
+    if (user) {
+      try {
+        // Delete player scores for this round
+        await supabase
+          .from('player_scores')
+          .delete()
+          .eq('round_id', roundId);
+        
+        // Delete round
+        await supabase
+          .from('rounds')
+          .delete()
+          .eq('id', roundId);
+      } catch (error) {
+        console.error("Error deleting round from Supabase:", error);
+      }
+    }
+    
     dispatch({ 
       type: 'DELETE_ROUND', 
       payload: { gameId, roundId } 
@@ -644,13 +824,31 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       title: "Round deleted",
       description: "The round has been removed from the game"
     });
-  }, []);
+  }, [user]);
 
   /**
    * Deletes multiple rounds from a game
    */
-  const deleteMultipleRounds = useCallback((gameId: string, roundIds: string[]) => {
+  const deleteMultipleRounds = useCallback(async (gameId: string, roundIds: string[]) => {
     if (roundIds.length === 0) return;
+    
+    if (user) {
+      try {
+        // Delete player scores for these rounds
+        await supabase
+          .from('player_scores')
+          .delete()
+          .in('round_id', roundIds);
+        
+        // Delete rounds
+        await supabase
+          .from('rounds')
+          .delete()
+          .in('id', roundIds);
+      } catch (error) {
+        console.error("Error deleting rounds from Supabase:", error);
+      }
+    }
     
     dispatch({ 
       type: 'DELETE_MULTIPLE_ROUNDS', 
@@ -661,7 +859,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
       title: "Rounds deleted",
       description: `${roundIds.length} rounds have been removed from the game`
     });
-  }, []);
+  }, [user]);
 
   /**
    * Updates a player's avatar
@@ -690,6 +888,21 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     toast({
       title: "Score updated",
       description: "The player's manual score has been updated"
+    });
+  }, []);
+
+  /**
+   * Updates a player's money
+   */
+  const updatePlayerMoney = useCallback((playerId: string, money?: number) => {
+    dispatch({ 
+      type: 'UPDATE_PLAYER_MONEY', 
+      payload: { playerId, money } 
+    });
+    
+    toast({
+      title: "Money updated",
+      description: "The player's money has been updated"
     });
   }, []);
 
@@ -839,6 +1052,7 @@ export const GameProvider = ({ children }: GameProviderProps) => {
     deleteMultipleRounds,
     updatePlayerAvatar,
     updatePlayerManualScore,
+    updatePlayerMoney,
     exportGameData,
     exportCsvData,
     importGameData,

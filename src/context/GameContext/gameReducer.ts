@@ -6,14 +6,14 @@
  * with actions for adding, updating, and removing games, rounds, and players.
  */
 
-import { Game, Player, PlayerScore } from "@/types";
+import { Game, Player, PlayerScore, Round } from "@/types";
 
 export type GameAction =
   | { type: 'SET_GAMES'; payload: Game[] }
   | { type: 'SET_PLAYERS'; payload: Player[] }
   | { type: 'CREATE_GAME'; payload: Game }
   | { type: 'ADD_PLAYER'; payload: Player }
-  | { type: 'ADD_ROUND'; payload: { gameId: string; round: { id: string; playerScores: PlayerScore[] } } }
+  | { type: 'ADD_ROUND'; payload: { gameId: string; round: Round } }
   | { type: 'DELETE_GAME'; payload: string }
   | { type: 'DELETE_MULTIPLE_GAMES'; payload: string[] }
   | { type: 'UPDATE_PLAYER_SCORE'; payload: { gameId: string; roundId: string; playerScore: PlayerScore } }
@@ -22,6 +22,7 @@ export type GameAction =
   | { type: 'DELETE_MULTIPLE_ROUNDS'; payload: { gameId: string; roundIds: string[] } }
   | { type: 'UPDATE_PLAYER_AVATAR'; payload: { playerId: string; avatar: Player['avatar'] } }
   | { type: 'UPDATE_PLAYER_MANUAL_SCORE'; payload: { playerId: string; manualTotal?: number } }
+  | { type: 'UPDATE_PLAYER_MONEY'; payload: { playerId: string; money?: number } }
   | { type: 'ADD_MULTIPLE_PLAYERS'; payload: Player[] }
   | { type: 'ADD_MULTIPLE_GAMES'; payload: Game[] }
   | { type: 'UPDATE_GAME_UNIQUE_CODE'; payload: { gameId: string; uniqueCode: string } };
@@ -177,6 +178,16 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         players: state.players.map(player => 
           player.id === action.payload.playerId 
             ? { ...player, manualTotal: action.payload.manualTotal }
+            : player
+        )
+      };
+      
+    case 'UPDATE_PLAYER_MONEY':
+      return {
+        ...state,
+        players: state.players.map(player => 
+          player.id === action.payload.playerId 
+            ? { ...player, money: action.payload.money }
             : player
         )
       };
