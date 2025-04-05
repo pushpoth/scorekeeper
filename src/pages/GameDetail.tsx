@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useParams, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
@@ -376,6 +375,7 @@ const GameDetail = () => {
       
       <RoundEditor
         gameId={game.id}
+        game={game}
         players={game.players}
         open={isAddingRound}
         onOpenChange={setIsAddingRound}

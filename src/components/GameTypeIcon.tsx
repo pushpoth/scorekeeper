@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { GameType } from '@/types';
-import { PlayingCards, PokerChip } from 'lucide-react';
+import { Cards, Coins } from 'lucide-react';
 
 interface GameTypeIconProps {
   gameType: GameType;
@@ -20,7 +20,7 @@ const GameTypeIcon: React.FC<GameTypeIconProps> = ({
     lg: 'h-8 w-8'
   };
 
-  const IconComponent = gameType === 'Phase 10' ? PlayingCards : PokerChip;
+  const IconComponent = gameType === 'Phase 10' ? Cards : Coins;
   
   return (
     <div className={`inline-flex items-center justify-center ${className}`}>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGameContext } from "@/context/GameContext";
@@ -17,8 +16,8 @@ import {
   CalendarIcon, 
   Plus, 
   DollarSign,
-  PlayingCards,
-  PokerChip
+  Cards,
+  Coins
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Layout from "@/components/Layout";
@@ -47,7 +46,6 @@ const NewGame = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Initialize player money from existing values
   useEffect(() => {
     const initialPlayerMoney: Record<string, number> = {};
     players.forEach(player => {
@@ -86,7 +84,6 @@ const NewGame = () => {
       return; // We should have at least one player
     }
     
-    // Update player money amounts
     selectedPlayers.forEach(playerId => {
       if (playerMoney[playerId] !== undefined) {
         updatePlayerMoney(playerId, playerMoney[playerId]);
@@ -120,7 +117,7 @@ const NewGame = () => {
                   onClick={() => setGameType("Phase 10")}
                 >
                   <CardContent className="p-4 flex items-center justify-center flex-col">
-                    <PlayingCards className="h-10 w-10 mb-2 text-phase10-blue" />
+                    <Cards className="h-10 w-10 mb-2 text-phase10-blue" />
                     <span className="font-medium">Phase 10</span>
                   </CardContent>
                 </Card>
@@ -135,7 +132,7 @@ const NewGame = () => {
                   onClick={() => setGameType("Poker")}
                 >
                   <CardContent className="p-4 flex items-center justify-center flex-col">
-                    <PokerChip className="h-10 w-10 mb-2 text-phase10-blue" />
+                    <Coins className="h-10 w-10 mb-2 text-phase10-blue" />
                     <span className="font-medium">Poker</span>
                   </CardContent>
                 </Card>

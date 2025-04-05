@@ -1,4 +1,3 @@
-
 /**
  * Game Operations Utility
  * 
@@ -215,7 +214,8 @@ export const processCsvImport = (csvData: string, existingPlayers: Player[]): { 
         id: uuidv4(),
         date: validateDate(dateStr),
         players: gamePlayers,
-        rounds
+        rounds,
+        gameType: "Phase 10" // Default to Phase 10 for imported games
       };
       
       newGames.push(game);
