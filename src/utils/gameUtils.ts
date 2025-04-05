@@ -1,5 +1,4 @@
-
-import { Game, Player, PlayerScore } from "@/types";
+import { Game, Player, PlayerScore, Round } from "@/types";
 
 export const calculateTotalScore = (game: Game, playerId: string): number => {
   return game.rounds.reduce((total, round) => {

@@ -16,7 +16,7 @@ import {
   CalendarIcon, 
   Plus, 
   DollarSign,
-  Cards,
+  SquareStack,
   Coins
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -117,7 +117,7 @@ const NewGame = () => {
                   onClick={() => setGameType("Phase 10")}
                 >
                   <CardContent className="p-4 flex items-center justify-center flex-col">
-                    <Cards className="h-10 w-10 mb-2 text-phase10-blue" />
+                    <SquareStack className="h-10 w-10 mb-2 text-phase10-blue" />
                     <span className="font-medium">Phase 10</span>
                   </CardContent>
                 </Card>
